@@ -1,0 +1,1751 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Commons Room Prototype</title>
+<style>
+:root{
+  --bg:#0f1115; --panel:rgba(20,23,30,.86); --panel2:rgba(255,255,255,.05); --line:rgba(255,255,255,.10);
+  --text:#e9ebf1; --muted:#9aa1b2; --accent:#6aa8ff; --accent2:#3d7be0; --good:#4fd18b; --warn:#ffb648; --bad:#ff6b6b;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;overflow:hidden;background:var(--bg);color:var(--text);font:14px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+button,input,textarea,select{font:inherit;color:inherit}
+#c{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:grab}
+#c:active{cursor:grabbing}
+.glass{background:var(--panel);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid var(--line);border-radius:14px;box-shadow:0 10px 30px rgba(0,0,0,.35)}
+.hidden{display:none!important}
+.muted{color:var(--muted)}
+.btn{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--panel2);padding:8px 12px;border-radius:10px;cursor:pointer;white-space:nowrap;transition:background .15s,border-color .15s}
+.btn:hover{background:rgba(255,255,255,.1)}
+.btn.on{background:rgba(106,168,255,.18);border-color:rgba(106,168,255,.55)}
+.btn.live{background:rgba(255,107,107,.16);border-color:rgba(255,107,107,.55)}
+.btn:disabled{opacity:.4;cursor:default}
+.btn .k{font-size:11px;color:var(--muted);border:1px solid var(--line);border-radius:5px;padding:0 4px}
+.primary{background:var(--accent2)!important;border-color:var(--accent)!important;color:#fff}
+.ghost{background:transparent;border:1px solid var(--line);border-radius:10px;padding:8px 12px;cursor:pointer}
+
+/* HUD */
+#roomCard{position:fixed;top:16px;left:16px;padding:10px 14px;max-width:calc(100vw - 32px);z-index:5}
+.rc-title{display:flex;align-items:center;gap:8px;font-weight:650}
+.live-dot{width:8px;height:8px;border-radius:50%;background:var(--good);box-shadow:0 0 0 4px rgba(79,209,139,.18)}
+.rc-sub{color:var(--muted);font-size:12px;margin-top:2px}
+#bar{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);display:flex;gap:6px;padding:8px;max-width:calc(100vw - 32px);overflow-x:auto;z-index:5}
+#micBtn{position:relative;overflow:hidden}
+#micBtn::after{content:"";position:absolute;left:0;bottom:0;height:3px;width:calc(var(--lvl,0)*100%);background:var(--good);transition:width .08s}
+#prompt{position:fixed;bottom:84px;left:50%;transform:translateX(-50%);padding:8px 14px;border-radius:999px;background:rgba(15,17,21,.82);border:1px solid var(--line);z-index:5;cursor:pointer;white-space:nowrap;max-width:calc(100vw - 32px);overflow:hidden;text-overflow:ellipsis}
+#prompt b{color:var(--accent)}
+#shareChip{position:fixed;top:16px;left:50%;transform:translateX(-50%);padding:8px 10px 8px 14px;display:flex;align-items:center;gap:10px;z-index:6;max-width:calc(100vw - 32px);flex-wrap:wrap}
+#shareChip .rec{width:9px;height:9px;border-radius:50%;background:var(--bad);animation:pulse 1.2s infinite}
+@keyframes pulse{50%{opacity:.35}}
+
+#side{position:fixed;top:16px;right:16px;width:310px;bottom:92px;display:flex;flex-direction:column;overflow:hidden;z-index:5}
+.side-h{display:flex;justify-content:space-between;align-items:center;padding:10px 14px 6px;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+#people{padding:0 8px 6px;max-height:42%;overflow:auto}
+.prow{display:flex;gap:10px;align-items:center;padding:7px 6px;border-radius:10px}
+.prow:hover{background:rgba(255,255,255,.04)}
+.pdot{width:26px;height:26px;border-radius:50%;flex:none;display:grid;place-items:center;font-size:12px;font-weight:700;color:#111}
+.pmain{flex:1;min-width:0}
+.pname{display:flex;gap:6px;align-items:center;font-weight:600;font-size:13px}
+.kind{font-size:10px;font-weight:600;padding:1px 6px;border-radius:999px;background:rgba(255,255,255,.08);color:var(--muted)}
+.kind.live{background:rgba(79,209,139,.15);color:var(--good)}
+.pstat{font-size:11.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.meter{height:4px;border-radius:2px;background:rgba(255,255,255,.08);margin-top:4px;overflow:hidden}
+.meter i{display:block;height:100%;width:0;background:#7f8899;transition:width .25s}
+.meter.talk i{background:var(--good)}
+.pact button{font-size:11.5px;padding:4px 8px;border-radius:8px;border:1px solid rgba(106,168,255,.5);background:rgba(106,168,255,.12);cursor:pointer}
+#chatLog{flex:1;overflow:auto;padding:4px 14px;display:flex;flex-direction:column;gap:6px;border-top:1px solid var(--line);padding-top:10px}
+.msg{font-size:13px;word-wrap:break-word}
+.msg .who{font-weight:650;margin-right:4px}
+.msg .tag{font-size:10px;color:var(--muted);margin-left:4px}
+.msg.far{color:var(--muted);font-style:italic;font-size:12px}
+.msg.sys{color:var(--muted);font-size:12px}
+#chatForm{padding:10px;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:6px}
+#chatIn{width:100%;padding:9px 11px;border-radius:10px;border:1px solid var(--line);background:rgba(0,0,0,.25);outline:none}
+#chatIn:focus{border-color:var(--accent)}
+#chatForm label{font-size:12px;color:var(--muted);display:flex;gap:6px;align-items:center}
+#sideToggle{position:fixed;top:16px;right:16px;z-index:6;display:none}
+#pad{position:fixed;left:16px;bottom:84px;display:none;grid-template-columns:repeat(3,44px);grid-template-rows:repeat(2,44px);gap:4px;z-index:5}
+#pad button{border-radius:10px;border:1px solid var(--line);background:var(--panel);font-size:16px;touch-action:none}
+@media (pointer:coarse){#pad{display:grid}}
+@media (max-width:760px){
+  #side{top:auto;left:16px;right:16px;width:auto;bottom:84px;height:46vh}
+  #side.collapsed{display:none}
+  #sideToggle{display:inline-flex}
+  #roomCard{max-width:calc(100vw - 140px)}
+  #bar .lbl{display:none}
+  #bar .k{display:none}
+}
+
+/* overlays */
+.overlay{position:fixed;inset:0;z-index:25}
+.overlay.center{display:grid;place-items:center;background:rgba(8,10,14,.6);padding:16px}
+.sheet{width:min(640px,100%);max-height:calc(100vh - 32px);overflow:auto;padding:18px 20px}
+.sheet h3{margin:0;font-size:18px}
+.sheet-h{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+.x{border:0;background:rgba(255,255,255,.08);width:30px;height:30px;border-radius:50%;cursor:pointer;font-size:16px;flex:none}
+.steps{display:grid;gap:10px;margin-bottom:14px}
+.step{display:flex;gap:12px;padding:12px;border-radius:12px;background:var(--panel2);border:1px solid var(--line)}
+.step p{margin:4px 0 0;color:var(--muted);font-size:13px}
+.sn{width:26px;height:26px;border-radius:50%;background:rgba(106,168,255,.18);color:var(--accent);display:grid;place-items:center;font-weight:700;flex:none}
+.drop{display:flex;flex-direction:column;gap:4px;align-items:center;justify-content:center;text-align:center;padding:22px;border:1.5px dashed rgba(106,168,255,.5);border-radius:12px;cursor:pointer;background:rgba(106,168,255,.06);margin-bottom:12px}
+.drop.over{background:rgba(106,168,255,.16)}
+.drop span{color:var(--muted);font-size:12.5px}
+.row{display:flex;gap:8px;flex-wrap:wrap}
+.row button{flex:1 1 180px}
+.help-grid{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-size:13px;margin-bottom:14px}
+.help-grid kbd{font:12px ui-monospace,monospace;background:rgba(255,255,255,.08);border:1px solid var(--line);border-radius:6px;padding:1px 6px;white-space:nowrap}
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.cols ul{margin:6px 0 0;padding-left:18px;color:var(--muted);font-size:13px}
+@media (max-width:560px){.cols{grid-template-columns:1fr}}
+
+#join{z-index:60;background:radial-gradient(ellipse at top,rgba(30,40,64,.75),rgba(8,10,14,.92))}
+.join-card{width:min(440px,100%);padding:26px}
+.brand{font-size:28px;font-weight:750;letter-spacing:-.02em}
+.brand span{color:var(--accent)}
+.join-card p{color:var(--muted);margin:6px 0 18px}
+.join-card input{width:100%;padding:11px 13px;border-radius:10px;border:1px solid var(--line);background:rgba(0,0,0,.3);outline:none;margin-bottom:10px}
+.join-card input:focus{border-color:var(--accent)}
+.join-card .primary{width:100%;padding:11px;border-radius:10px;border:1px solid;cursor:pointer;font-weight:600}
+.tip{font-size:12.5px;color:var(--muted);margin-top:14px;padding:10px 12px;border-radius:10px;background:var(--panel2);border:1px solid var(--line)}
+
+/* whiteboard editor */
+#wb{z-index:20;background:rgba(8,10,14,.84);display:flex;flex-direction:column}
+.wb-top{display:flex;gap:6px;align-items:center;padding:10px 12px;flex-wrap:wrap;border-bottom:1px solid var(--line);background:var(--panel)}
+.wb-top .title{font-weight:650;margin-right:8px}
+.wb-top .sep{width:1px;height:24px;background:var(--line);margin:0 4px}
+.sw{width:22px;height:22px;border-radius:50%;border:2px solid transparent;cursor:pointer;padding:0}
+.sw.on{border-color:#fff}
+#wbStage{flex:1;display:grid;place-items:center;padding:16px;min-height:0}
+#wbBoard{position:relative;background:#fbfbf8;background-image:linear-gradient(rgba(30,60,120,.06) 1px,transparent 1px),linear-gradient(90deg,rgba(30,60,120,.06) 1px,transparent 1px);background-size:3.2% 6.4%;border-radius:10px;box-shadow:0 0 0 8px #aab2bd,0 20px 60px rgba(0,0,0,.5);overflow:hidden;touch-action:none}
+#wbItems{position:absolute;inset:0}
+#wbInk{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:9999}
+#wbBoard.pen #wbInk{pointer-events:auto;cursor:crosshair}
+#wbBoard.erase #wbInk{pointer-events:auto;cursor:cell}
+.wbi{position:absolute;border-radius:.55em;box-shadow:0 .2em .8em rgba(0,0,0,.18);overflow:hidden;color:#1f2937;background:#fff;display:flex;flex-direction:column;cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none}
+.wbi .del{position:absolute;top:.35em;right:.35em;width:1.6em;height:1.6em;border-radius:50%;border:0;background:rgba(0,0,0,.55);color:#fff;opacity:0;cursor:pointer;font-size:.85em;line-height:1;z-index:2}
+.wbi:hover .del{opacity:1}
+.wbi .rs{position:absolute;right:0;bottom:0;width:1.1em;height:1.1em;cursor:nwse-resize;background:linear-gradient(135deg,transparent 50%,rgba(0,0,0,.28) 50%);z-index:2}
+.by{font-size:.68em;color:rgba(0,0,0,.5);padding:.2em .9em .55em;flex:none}
+.t-note{background:#fff3a8}
+.t-note.lap{background:#dbeafe}
+.note-body{flex:1;padding:.7em .8em 0;outline:none;white-space:pre-wrap;cursor:text;user-select:text;-webkit-user-select:text;overflow:auto;font-size:1em;line-height:1.3}
+.link-row{display:flex;gap:.7em;align-items:center;padding:.8em .8em .3em}
+.favi{width:2.2em;height:2.2em;border-radius:.5em;background:#e8eefc;color:#3d63c9;display:grid;place-items:center;font-weight:700;flex:none}
+.link-meta{min-width:0}
+.link-meta .t{font-weight:650;font-size:.95em;line-height:1.2;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.link-meta .d{font-size:.75em;color:#6b7280}
+.wbi a.open{margin:auto .8em .1em;font-size:.8em;color:#2f62d6;text-decoration:none;font-weight:600}
+.ai-h{color:#fff;padding:.45em .8em;font-size:.78em;font-weight:700;display:flex;justify-content:space-between;align-items:center;gap:.5em;flex:none}
+.ai-h a{color:#fff;opacity:.9;font-weight:600}
+.ai-t{font-weight:700;padding:.55em .8em .2em;font-size:.95em;line-height:1.2;flex:none}
+.ai-b{flex:1;overflow:auto;padding:.2em .8em .4em;font-size:.82em;white-space:pre-wrap;line-height:1.35;color:#374151;user-select:text;-webkit-user-select:text;cursor:auto}
+.file-img{flex:1;min-height:0;background:#eef0f3}
+.file-img img{width:100%;height:100%;object-fit:cover;display:block;pointer-events:none}
+.file-row{display:flex;gap:.6em;align-items:center;padding:.6em .8em .2em}
+.ext{width:2.3em;height:2.6em;border-radius:.35em;background:#eef2ff;color:#4338ca;display:grid;place-items:center;font-size:.65em;font-weight:800;flex:none}
+.fname{font-weight:600;font-size:.85em;line-height:1.2;word-break:break-all;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.fsize{font-size:.72em;color:#6b7280}
+.t-screen{background:#0e1116;color:#fff}
+.scr-h{font-size:.75em;padding:.4em .7em;display:flex;gap:.5em;align-items:center;flex:none}
+.live-b{background:#e5484d;color:#fff;font-weight:800;font-size:.85em;padding:.05em .45em;border-radius:.3em}
+.scr-b{flex:1;min-height:0;display:grid;place-items:center;background:#000}
+.scr-b video,.scr-b img{max-width:100%;max-height:100%;display:block;pointer-events:none}
+.t-web{background:#f3f4f6}
+.t-web .del{right:auto;left:.35em;top:.4em}
+.web-h{display:flex;gap:.35em;align-items:center;padding:.35em .45em .35em 2.2em;background:#e5e7eb;flex:none}
+.web-src{font-size:.62em;font-weight:800;color:#fff;padding:.15em .45em;border-radius:.3em;flex:none}
+.web-url{flex:1;min-width:0;font-size:.72em;padding:.25em .5em;border-radius:.4em;border:1px solid #d1d5db;background:#fff;color:#111827;outline:none}
+.web-url:focus{border-color:#2f62d6}
+.web-h button,.web-h a{font-size:.68em;border:1px solid #d1d5db;background:#fff;color:#111827;border-radius:.4em;padding:.25em .5em;cursor:pointer;white-space:nowrap;text-decoration:none;flex:none}
+.web-h button.live{background:#e5484d;color:#fff;border-color:#e5484d}
+.web-b{flex:1;min-height:0;position:relative;background:#fff;cursor:auto}
+.web-b iframe{width:100%;height:100%;border:0;display:block;background:#fff}
+.web-b video,.web-b img{width:100%;height:100%;object-fit:contain;background:#000;display:block}
+.web-blocked{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.6em;text-align:center;padding:1em 1.4em;color:#4b5563;font-size:.78em;line-height:1.4}
+.web-blocked b{font-size:1.15em;color:#111827}
+.web-blocked .row2{display:flex;gap:.5em;flex-wrap:wrap;justify-content:center;margin-top:.3em}
+.web-blocked button,.web-blocked a{font-size:.95em;border-radius:.5em;padding:.45em .8em;border:1px solid #2f62d6;background:#2f62d6;color:#fff;cursor:pointer;text-decoration:none}
+.web-blocked a{background:#fff;color:#2f62d6}
+.web-tip{position:absolute;left:0;right:0;bottom:0;font-size:.62em;background:rgba(17,24,39,.78);color:#fff;padding:.3em .6em;opacity:0;transition:opacity .2s;pointer-events:none}
+.web-b:hover .web-tip{opacity:1}
+
+/* wallpaper / desk display mode */
+body.wall #bar,body.wall #side,body.wall #sideToggle,body.wall #prompt,body.wall #toasts,body.wall #pad,body.wall #roomCard,body.wall #join{display:none!important}
+#wallStrip{position:fixed;top:24px;right:24px;width:300px;padding:12px 14px;z-index:5}
+#wallStrip .ws-h{display:flex;align-items:center;gap:8px;font-weight:650}
+#wallStrip .ws-sub{color:var(--muted);font-size:12px;margin:2px 0 8px}
+.ws-people{display:flex;flex-wrap:wrap;gap:6px}
+.ws-p{display:flex;align-items:center;gap:5px;padding:3px 9px;border-radius:999px;background:rgba(255,255,255,.07);font-size:12.5px}
+.ws-p i{width:8px;height:8px;border-radius:50%}
+.ws-p.talk{background:rgba(79,209,139,.22)}
+.ws-msgs{margin-top:8px;display:flex;flex-direction:column;gap:4px;font-size:12.5px}
+.ws-msgs div{transition:opacity .6s}
+
+#modal{z-index:40}
+#modalForm label{display:block;font-size:12.5px;color:var(--muted);margin-bottom:10px}
+#modalForm input,#modalForm textarea,#modalForm select{display:block;width:100%;margin-top:4px;padding:9px 11px;border-radius:10px;border:1px solid var(--line);background:rgba(0,0,0,.3);outline:none;resize:vertical}
+#modalForm input:focus,#modalForm textarea:focus{border-color:var(--accent)}
+.hint{font-size:12px;color:var(--muted);margin:-4px 0 10px}
+.mact{display:flex;justify-content:flex-end;gap:8px;margin-top:6px}
+.mact .primary{padding:8px 14px;border-radius:10px;border:1px solid;cursor:pointer}
+
+#viewer{position:fixed;left:16px;bottom:84px;width:min(520px,calc(100vw - 32px));z-index:30;overflow:hidden}
+#viewer .vh{display:flex;justify-content:space-between;align-items:center;padding:8px 10px 8px 14px;font-size:13px;font-weight:600}
+#viewerBody{background:#000;aspect-ratio:16/10;display:grid;place-items:center}
+#viewerBody img,#viewerBody canvas{max-width:100%;max-height:100%;display:block}
+
+#toasts{position:fixed;top:80px;left:50%;transform:translateX(-50%);display:flex;flex-direction:column;gap:8px;z-index:50;width:min(420px,calc(100vw - 32px));pointer-events:none}
+.toast{padding:10px 14px;pointer-events:auto;animation:tin .2s ease-out}
+.tact{display:flex;gap:6px;justify-content:flex-end;margin-top:8px}
+.tact button{padding:6px 12px;border-radius:8px;border:1px solid var(--line);background:var(--panel2);cursor:pointer}
+@keyframes tin{from{transform:translateY(-6px);opacity:0}}
+#fatal{position:fixed;inset:0;display:grid;place-items:center;padding:24px;text-align:center;z-index:100;background:var(--bg)}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<div id="roomCard" class="glass">
+  <div class="rc-title"><span class="live-dot"></span><span id="roomName">Pattee Library · Study Room 3</span></div>
+  <div class="rc-sub" id="roomSub">Demo scan · 14 × 10 m · 8 seats · 2 tables</div>
+</div>
+
+<div id="shareChip" class="glass hidden">
+  <span class="rec"></span><span id="shareTxt">You're sharing your screen</span>
+  <button class="btn" id="pinBtn">Pin to whiteboard</button>
+  <button class="btn live" id="stopShareBtn">Stop</button>
+</div>
+
+<button id="prompt" class="hidden"></button>
+
+<div id="bar" class="glass">
+  <button class="btn" id="micBtn" title="Microphone (speaking detection)">🎙 <span class="lbl">Mic off</span></button>
+  <button class="btn on" id="voiceBtn" title="Hear simulated classmates with spatial audio">🔊 <span class="lbl">Room audio</span></button>
+  <button class="btn" id="shareBtn" title="Share your screen">🖥 <span class="lbl">Share screen</span></button>
+  <button class="btn" id="boardBtn">▦ <span class="lbl">Whiteboard</span> <span class="k">B</span></button>
+  <button class="btn" id="deskBtn" title="Start working: your laptop opens for your group to see, and a small always-on-top window keeps your table in view while you use your own apps">💻 <span class="lbl">Open laptop</span> <span class="k">L</span></button>
+  <button class="btn" id="scanBtn">◫ <span class="lbl">Scan / import room</span></button>
+  <button class="btn" id="helpBtn" title="Controls & what's real">?</button>
+</div>
+
+<button class="btn glass" id="sideToggle">💬 People</button>
+<aside id="side" class="glass">
+  <div class="side-h"><span>In this room</span><span id="pcount"></span></div>
+  <div id="people"></div>
+  <div class="side-h" style="border-top:1px solid var(--line);padding-top:10px">Proximity chat <span style="text-transform:none;letter-spacing:0">hear within 6 m · whole table when seated</span></div>
+  <div id="chatLog"></div>
+  <form id="chatForm" autocomplete="off">
+    <input id="chatIn" placeholder="Say something to people nearby… (Enter)" maxlength="400">
+    <label><input type="checkbox" id="roomWide"> Announce to the whole room</label>
+  </form>
+</aside>
+
+<div id="pad">
+  <span></span><button data-dir="f">▲</button><span></span>
+  <button data-dir="l">◀</button><button data-dir="b">▼</button><button data-dir="r">▶</button>
+</div>
+
+<!-- whiteboard editor -->
+<div id="wb" class="overlay hidden">
+  <div class="wb-top">
+    <span class="title">Whiteboard</span>
+    <button class="btn on" data-tool="select" title="Move & resize">✥ Move</button>
+    <button class="btn" data-tool="pen">✎ Draw</button>
+    <button class="btn" data-tool="erase">⌫ Erase</button>
+    <span id="swatches" style="display:flex;gap:4px;align-items:center"></span>
+    <span class="sep"></span>
+    <button class="btn" id="addNote">＋ Note</button>
+    <button class="btn" id="addLink">🔗 Website</button>
+    <button class="btn" id="addFile">📎 File</button>
+    <button class="btn" id="addWeb">🌐 Live window</button>
+    <button class="btn" id="addAI">✦ AI chat</button>
+    <button class="btn" id="addScreen">🖥 Live screen</button>
+    <span style="flex:1"></span>
+    <span class="muted" style="font-size:12px" id="wbCount"></span>
+    <button class="btn" id="closeBoard">Done <span class="k">Esc</span></button>
+  </div>
+  <div id="wbStage"><div id="wbBoard"><div id="wbItems"></div><canvas id="wbInk"></canvas></div></div>
+  <input type="file" id="fileIn" multiple hidden>
+</div>
+
+<!-- scan -->
+<div id="scan" class="overlay center hidden">
+  <div class="sheet glass">
+    <div class="sheet-h"><h3>Bring a real space in</h3><button class="x" data-close>×</button></div>
+    <div class="steps">
+      <div class="step"><div class="sn">1</div><div><b>Capture it with your phone</b><p><b>iPhone Pro (LiDAR):</b> tap a link → an App Clip opens without installing → a RoomPlan scan finds the walls, tables and chairs.<br><b>Any phone, browser only:</b> record a slow walk-around video in Safari or Chrome → upload it → the cloud builds a photoreal splat plus a mesh for walls and floors.</p></div></div>
+      <div class="step"><div class="sn">2</div><div><b>Tag what matters</b><p>Confirm the seats it found, pick a wall for the whiteboard, and decide who can enter.</p></div></div>
+      <div class="step"><div class="sn">3</div><div><b>Share a link</b><p>People join from a laptop browser, and the room works the same way for everyone.</p></div></div>
+    </div>
+    <label id="drop" class="drop"><input type="file" id="glbIn" accept=".glb,model/gltf-binary" hidden><b>Try it now: drop a .glb scan here</b><span>Export a GLB from Polycam or Scaniverse. Other open tabs load it too.</span></label>
+    <div class="row">
+      <button class="btn" id="addSeat">＋ Add a seat where I'm standing</button>
+      <button class="btn" id="moveBoard">Move whiteboard in front of me</button>
+      <button class="btn" id="resetRoom">Restore demo room</button>
+    </div>
+    <p class="muted" id="scanStatus" style="font-size:12.5px;margin:10px 0 0"></p>
+  </div>
+</div>
+
+<!-- help -->
+<div id="help" class="overlay center hidden">
+  <div class="sheet glass">
+    <div class="sheet-h"><h3>Controls</h3><button class="x" data-close>×</button></div>
+    <div class="help-grid">
+      <kbd>W A S D</kbd><span>Walk (Shift to go faster); arrow keys also work</span>
+      <kbd>Drag</kbd><span>Look around; click a chair to sit, or click the whiteboard to open it</span>
+      <kbd>E</kbd><span>Sit down or stand up. Sitting at a table puts you in its audio bubble</span>
+      <kbd>B</kbd><span>Open the whiteboard</span>
+      <kbd>L</kbd><span>Open or close your laptop: start or stop working (Desk Mode). Your group sees the lid</span>
+      <kbd>Hold V</kbd><span>Talk without a mic (lights up your speaking ring)</span>
+      <kbd>Enter</kbd><span>Chat with people nearby</span>
+    </div>
+    <label style="display:flex;gap:8px;align-items:flex-start;padding:10px 12px;border-radius:10px;background:var(--panel2);border:1px solid var(--line);margin-bottom:14px;font-size:13px">
+      <input type="checkbox" id="deskSeated" style="margin-top:3px">
+      <span><b>Experiment: Desk Mode needs a seat.</b> <span class="muted">On: opening the pop-out sits you at a free chair, and standing up closes it. Off: the pop-out opens wherever you're standing.</span></span>
+    </label>
+    <div class="cols">
+      <div><b>Working in this prototype</b><ul>
+        <li>A 3D room in the browser where you can walk and sit</li>
+        <li>Open a second tab to join as another person. Avatars, chat, the whiteboard and seats sync between tabs</li>
+        <li>Real screen capture. Viewers must ask first, and you allow or deny each one</li>
+        <li>Live windows: websites load inside the card, and Claude or ChatGPT stream from your own tab</li>
+        <li>Desk view: a pop-out window of your table that stays on top while you work</li>
+        <li>Desk-display mode (<code>?mode=wallpaper</code>) for Wallpaper Engine, Lively, Plash or a spare tablet</li>
+        <li>Mic-level speaking detection</li>
+        <li>Import a .glb scan</li>
+        <li>Spatial "voices" that fade with distance</li>
+      </ul></div>
+      <div><b>Simulated / next to build</b><ul>
+        <li>Maya, Jordan &amp; Priya are scripted classmates</li>
+        <li>Real voice transport (needs a WebRTC SFU such as LiveKit)</li>
+        <li>LiDAR capture (App Clip + RoomPlan) and video-to-splat reconstruction</li>
+        <li>Accounts, saved rooms, and syncing across machines</li>
+      </ul></div>
+    </div>
+  </div>
+</div>
+
+<div id="modal" class="overlay center hidden"><form id="modalForm" class="sheet glass" style="width:min(520px,100%)"></form></div>
+
+<div id="viewer" class="glass hidden">
+  <div class="vh"><span id="viewerTitle"></span><button class="x" id="viewerClose">×</button></div>
+  <div id="viewerBody"></div>
+</div>
+
+<div id="toasts"></div>
+
+<div id="wallStrip" class="glass hidden">
+  <div class="ws-h"><span class="live-dot"></span><span id="wsRoom"></span></div>
+  <div class="ws-sub" id="wsSub"></div>
+  <div class="ws-people" id="wsPeople"></div>
+  <div class="ws-msgs" id="wsMsgs"></div>
+</div>
+
+<div id="join" class="overlay center">
+  <div class="join-card glass">
+    <div class="brand">Commons<span>.</span></div>
+    <p>A real study space, scanned and shared. Walk in, take a seat, and work next to people.</p>
+    <input id="nameIn" placeholder="Your name" maxlength="24" autocomplete="off">
+    <button class="primary" id="joinBtn">Join Study Room 3</button>
+    <div class="tip">💡 Open this page in <b>a second browser tab</b> to see two people in the same room. Positions, proximity chat, the whiteboard and screen share all sync between the tabs.</div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+<script>
+if (!window.THREE) {
+  document.body.insertAdjacentHTML('beforeend','<div id="fatal"><div><h2>Couldn’t load the 3D engine</h2><p class="muted">This prototype loads three.js from cdnjs. Check your connection and reload.</p></div></div>');
+  throw new Error('three.js missing');
+}
+
+// ---------- utils
+const $ = s => document.querySelector(s);
+const rid = () => Math.random().toString(36).slice(2, 10);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const safeColor = c => /^#[0-9a-f]{6}$/i.test(c) ? c : '#9aa1b2';
+const safeUrl = u => { try { const x = new URL(u); return /^https?:$/.test(x.protocol) ? x.href : null; } catch { return null; } };
+const domainOf = u => { try { return new URL(u).hostname.replace(/^www\./, ''); } catch { return String(u); } };
+const fmtSize = b => b < 1024 ? b + ' B' : b < 1048576 ? (b / 1024).toFixed(0) + ' KB' : (b / 1048576).toFixed(1) + ' MB';
+const isTyping = el => el && el.closest && el.closest('input:not([type=checkbox]):not([type=radio]),textarea,select,[contenteditable="true"]');
+const lerpAngle = (a, b, k) => { const d = ((b - a + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI; return a + d * k; };
+function rr(x, X, Y, W, H, R) { x.beginPath(); x.moveTo(X + R, Y); x.arcTo(X + W, Y, X + W, Y + H, R); x.arcTo(X + W, Y + H, X, Y + H, R); x.arcTo(X, Y + H, X, Y, R); x.arcTo(X, Y, X + W, Y, R); x.closePath(); }
+function wrapLines(ctx, text, maxW) {
+  const out = [];
+  for (const para of String(text ?? '').split('\n')) {
+    let line = '';
+    for (const w of para.split(/\s+/)) {
+      const t = line ? line + ' ' + w : w;
+      if (ctx.measureText(t).width > maxW && line) { out.push(line); line = w; } else line = t;
+    }
+    out.push(line);
+  }
+  return out;
+}
+function textBlock(ctx, text, X, Y, maxW, lh, maxH) {
+  let yy = Y;
+  for (const l of wrapLines(ctx, text, maxW)) { if (yy + lh > Y + maxH) break; ctx.fillText(l, X, yy); yy += lh; }
+  return yy;
+}
+const readURL = f => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(f); });
+
+// ---------- state
+const COLORS = ['#6aa8ff', '#ffb648', '#4fd18b', '#ff7eb6', '#8bd3ff', '#f6e05e', '#ff9e6b'];
+const RANGE = 6;
+const me = { id: 'u-' + rid(), name: '', color: COLORS[Math.floor(Math.random() * COLORS.length)], x: 0, z: 3.6, yaw: 0, pitch: -0.05, seat: null, speaking: false, sharing: false, working: false };
+const peers = new Map();
+let joined = false, botsOn = true, voicesOn = true, ptt = false;
+let deskWin = null, deskCtx = null, deskCanvas = null, deskVideo = null, deskTimer = null;   // desk view pop-out
+let deskNeedsSeat = true;   // experiment toggle in the help sheet; see CONTEXT.md "Desk Mode"
+try { deskNeedsSeat = localStorage.getItem('commons-desk-needs-seat') !== '0'; } catch {}
+// ?mode=wallpaper (or window.COMMONS_MODE) turns the page into a seat-locked "desk display" for a desktop wallpaper or a spare tablet
+const params = new URLSearchParams(location.search);
+const WALL = (params.get('mode') || window.COMMONS_MODE) === 'wallpaper';
+const wallCfg = { name: params.get('name') || 'You', seat: params.get('seat') || 'A3', view: params.get('view') || 'seat', fps: 30 };
+if (WALL) { document.body.classList.add('wall'); voicesOn = false; }
+window.wallpaperPropertyListener = {   // Wallpaper Engine calls this with the user's settings from project.json
+  applyUserProperties(p) {
+    if (p.displayname) { wallCfg.name = p.displayname.value || 'You'; if (joined) { me.name = wallCfg.name; retag(myAv, me.name, me.color); } }
+    if (p.seat) { wallCfg.seat = p.seat.value; if (joined) wallSit(); }
+    if (p.view) wallCfg.view = p.view.value;
+    if (p.showpanel) $('#wallStrip').classList.toggle('hidden', !p.showpanel.value);
+    if (p.simulated) botsOn = !!p.simulated.value;
+  },
+  applyGeneralProperties(p) { if (p.fps) wallCfg.fps = p.fps; },
+};
+const bc = ('BroadcastChannel' in window) ? new BroadcastChannel('commons-room-v1') : null;
+function send(msg) { if (!bc || !joined) return; msg.from = me.id; try { bc.postMessage(msg); } catch (e) { console.warn(e); } }
+
+// ---------- three setup
+const canvas = $('#c');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.outputEncoding = THREE.sRGBEncoding;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.05;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x14161c);
+const camera = new THREE.PerspectiveCamera(68, 1, 0.05, 200);
+camera.rotation.order = 'YXZ';
+
+scene.add(new THREE.HemisphereLight(0xfff4e6, 0x3a3026, 0.7));
+const sun = new THREE.DirectionalLight(0xfff1dc, 1.15);
+sun.position.set(9, 8, 2); sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048);
+Object.assign(sun.shadow.camera, { left: -9, right: 9, top: 9, bottom: -9, near: 1, far: 30 });
+sun.shadow.bias = -0.0005;
+scene.add(sun);
+
+const mat = (c, o = {}) => new THREE.MeshStandardMaterial(Object.assign({ color: c, roughness: .8, metalness: 0 }, o));
+function box(w, h, d, m, x, y, z, parent) {
+  const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m);
+  b.position.set(x, y, z); b.castShadow = true; b.receiveShadow = true; parent.add(b); return b;
+}
+function plankTex() {
+  const c = document.createElement('canvas'); c.width = 512; c.height = 512; const x = c.getContext('2d');
+  for (let i = 0; i < 8; i++) {
+    const y = i * 64, b = 118 + Math.random() * 22;
+    x.fillStyle = `rgb(${b + 44},${b + 12},${b - 28})`; x.fillRect(0, y, 512, 64);
+    for (let k = 0; k < 50; k++) { x.fillStyle = `rgba(70,35,10,${Math.random() * .09})`; x.fillRect(Math.random() * 512, y + Math.random() * 64, 30 + Math.random() * 140, 1); }
+    x.fillStyle = 'rgba(0,0,0,.28)'; x.fillRect(0, y, 512, 2); x.fillRect(Math.random() * 512, y, 2, 64);
+  }
+  const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(5, 4); t.encoding = THREE.sRGBEncoding;
+  t.anisotropy = renderer.capabilities.getMaxAnisotropy(); return t;
+}
+
+// ---------- demo room (stands in for a phone scan)
+const demoRoom = new THREE.Group(); scene.add(demoRoom);
+const RW = 14, RD = 10, RH = 3.2;
+const DEMO_BOUNDS = { minX: -6.65, maxX: 6.65, minZ: -4.55, maxZ: 4.65 };
+let bounds = { ...DEMO_BOUNDS };
+const floor = new THREE.Mesh(new THREE.PlaneGeometry(RW, RD), new THREE.MeshStandardMaterial({ map: plankTex(), roughness: .72 }));
+floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; demoRoom.add(floor);
+const rug = new THREE.Mesh(new THREE.PlaneGeometry(11, 4.6), mat(0x34465e, { roughness: 1 }));
+rug.rotation.x = -Math.PI / 2; rug.position.set(0, 0.004, 0.8); rug.receiveShadow = true; demoRoom.add(rug);
+const ceil = new THREE.Mesh(new THREE.PlaneGeometry(RW, RD), mat(0xf2f0eb)); ceil.rotation.x = Math.PI / 2; ceil.position.y = RH; demoRoom.add(ceil);
+const wallM = mat(0xe4dfd5, { roughness: .95 });
+function wall(w, x, z, ry) { const m = new THREE.Mesh(new THREE.PlaneGeometry(w, RH), wallM); m.position.set(x, RH / 2, z); m.rotation.y = ry; m.receiveShadow = true; demoRoom.add(m); }
+wall(RW, 0, -RD / 2, 0); wall(RW, 0, RD / 2, Math.PI); wall(RD, -RW / 2, 0, Math.PI / 2); wall(RD, RW / 2, 0, -Math.PI / 2);
+const glassM = new THREE.MeshBasicMaterial({ color: 0xcfe6ff }), frameM = mat(0x3b3f46, { metalness: .4, roughness: .5 });
+for (const z of [-3, 0, 3]) {
+  const g = new THREE.Mesh(new THREE.PlaneGeometry(1.8, 1.6), glassM); g.position.set(6.99, 1.75, z); g.rotation.y = -Math.PI / 2; demoRoom.add(g);
+  box(0.06, 1.7, 0.06, frameM, 6.96, 1.75, z, demoRoom).castShadow = false;
+  box(0.06, 0.06, 1.9, frameM, 6.96, 1.75, z, demoRoom).castShadow = false;
+  box(0.08, 0.08, 1.95, frameM, 6.95, 0.95, z, demoRoom).castShadow = false;
+}
+const panelM = new THREE.MeshBasicMaterial({ color: 0xfffbf0 });
+for (const x of [-3, 3]) {
+  const p = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 0.5), panelM); p.rotation.x = Math.PI / 2; p.position.set(x, RH - 0.01, 0.8); demoRoom.add(p);
+  const pl = new THREE.PointLight(0xffe2b8, 0.45, 9); pl.position.set(x, RH - 0.3, 0.8); demoRoom.add(pl);
+}
+// bookshelf + plant
+const shelfM = mat(0x5a4632);
+box(0.42, 2.2, 2.6, shelfM, -6.78, 1.1, -1.5, demoRoom);
+const bookCols = [0x8c3b3b, 0x2f5d8c, 0xc9a227, 0x3f7d4e, 0x6b4c8c, 0xb4572d, 0x26364d];
+for (let r = 0; r < 4; r++) for (let z = -2.7; z < -0.35;) {
+  const w = 0.05 + Math.random() * 0.06, h = 0.28 + Math.random() * 0.12;
+  box(0.26, h, w, mat(bookCols[Math.floor(Math.random() * bookCols.length)]), -6.55, 0.28 + r * 0.5 + h / 2, z, demoRoom).castShadow = false;
+  z += w + 0.008;
+}
+box(0.5, 0.5, 0.5, mat(0xd8d2c6), 6.3, 0.25, -4.3, demoRoom);
+const leaf = new THREE.Mesh(new THREE.IcosahedronGeometry(0.55, 1), mat(0x3f7d4e, { flatShading: true })); leaf.position.set(6.3, 1.0, -4.3); leaf.castShadow = true; demoRoom.add(leaf);
+
+// tables & seats
+const seats = [], colliders = [], tableZones = {};
+const woodM = mat(0x7a5a40, { roughness: .55 }), legM = mat(0x2b2f36, { roughness: .5, metalness: .3 }), chairM = mat(0x34506e, { roughness: .7 });
+const seatClickables = [];
+function makeChair(s, parent) {
+  const g = new THREE.Group(); g.position.set(s.x, 0, s.z); g.rotation.y = s.yaw;
+  box(0.46, 0.06, 0.46, chairM, 0, 0.46, 0, g); box(0.46, 0.5, 0.05, chairM, 0, 0.74, 0.21, g);
+  for (const a of [-0.2, 0.2]) for (const b of [-0.2, 0.2]) box(0.035, 0.44, 0.035, legM, a, 0.22, b, g);
+  g.traverse(o => { o.userData.seatId = s.id; });
+  parent.add(g); seatClickables.push(g); return g;
+}
+function makeTable(id, cx, cz) {
+  box(3, 0.05, 1.2, woodM, cx, 0.75, cz, demoRoom);
+  for (const sx of [-1.4, 1.4]) for (const sz of [-0.5, 0.5]) box(0.05, 0.73, 0.05, legM, cx + sx, 0.365, cz + sz, demoRoom);
+  colliders.push({ minX: cx - 1.5, maxX: cx + 1.5, minZ: cz - 0.6, maxZ: cz + 0.6 });
+  const zone = new THREE.Mesh(new THREE.PlaneGeometry(4.3, 3.3), new THREE.MeshBasicMaterial({ color: 0x6aa8ff, transparent: true, opacity: 0, depthWrite: false }));
+  zone.rotation.x = -Math.PI / 2; zone.position.set(cx, 0.012, cz); demoRoom.add(zone); tableZones[id] = zone;
+  let i = 0;
+  for (const side of [1, -1]) for (const ox of [-0.75, 0.75]) {
+    const s = { id: id + i++, x: cx + ox, z: cz + side * 0.95, yaw: side === 1 ? 0 : Math.PI, table: id, demo: true };
+    s.mesh = makeChair(s, demoRoom); seats.push(s);
+  }
+}
+makeTable('A', -3, 0.8); makeTable('B', 3, 0.8);
+colliders.push({ minX: -7, maxX: -6.55, minZ: -2.8, maxZ: -0.2 }, { minX: 6.05, maxX: 6.55, minZ: -4.55, maxZ: -4.05 });
+const customGroup = new THREE.Group(); scene.add(customGroup);
+const seatById = id => seats.find(s => s.id === id);
+let importedRoom = null, importedBuf = null;
+const activeSeats = () => seats.filter(s => !(s.demo && importedRoom));
+const activeColliders = () => importedRoom ? [] : colliders;
+
+// hearing ring
+const hearRing = new THREE.Mesh(new THREE.RingGeometry(RANGE - 0.05, RANGE, 96), new THREE.MeshBasicMaterial({ color: 0x6aa8ff, transparent: true, opacity: 0.16, depthWrite: false }));
+hearRing.rotation.x = -Math.PI / 2; scene.add(hearRing);
+
+// scan sweep effect
+const sweep = new THREE.Mesh(new THREE.PlaneGeometry(RD + 2, RH + 1), new THREE.MeshBasicMaterial({ color: 0x6aa8ff, transparent: true, opacity: 0, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending }));
+sweep.rotation.y = Math.PI / 2; sweep.visible = false; scene.add(sweep);
+let sweepT = 0, sweepFrom = -7, sweepTo = 7;
+function startSweep(a, b) { sweepFrom = a; sweepTo = b; sweepT = 0; sweep.visible = true; }
+
+// ---------- whiteboard (3D)
+const boardGroup = new THREE.Group(); scene.add(boardGroup);
+const BW = 2048, BH = 1024;
+const boardCanvas = document.createElement('canvas'); boardCanvas.width = BW; boardCanvas.height = BH;
+const bctx = boardCanvas.getContext('2d');
+const boardTex = new THREE.CanvasTexture(boardCanvas); boardTex.encoding = THREE.sRGBEncoding; boardTex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+const bframe = new THREE.Mesh(new THREE.BoxGeometry(4.36, 2.26, 0.06), mat(0xaab2bd, { metalness: .4, roughness: .4 })); bframe.castShadow = true; boardGroup.add(bframe);
+const boardSurface = new THREE.Mesh(new THREE.PlaneGeometry(4.2, 2.1), new THREE.MeshBasicMaterial({ map: boardTex, toneMapped: false }));
+boardSurface.position.z = 0.032; boardGroup.add(boardSurface);
+const tray = new THREE.Mesh(new THREE.BoxGeometry(3.6, 0.04, 0.12), mat(0x9aa3ad)); tray.position.set(0, -1.15, 0.07); boardGroup.add(tray);
+const DEMO_BOARD = { p: [0, 1.6, -4.94], ry: 0 };
+function setBoardPos(p, ry) { boardGroup.position.set(p[0], p[1], p[2]); boardGroup.rotation.y = ry; }
+setBoardPos(DEMO_BOARD.p, DEMO_BOARD.ry);
+
+const items = new Map(), strokes = new Map();
+let boardDirty = true, zTop = 10;
+const imgCache = new Map(), frameImgs = new Map(), localFiles = new Map();
+function getImg(key, src) {
+  let im = imgCache.get(key);
+  if (!im || im._src !== src) { im = new Image(); im._src = src; im.onload = () => { boardDirty = true; }; im.src = src; imgCache.set(key, im); }
+  return im;
+}
+const AI_COLORS = { Claude: '#d97757', ChatGPT: '#10a37f', Gemini: '#4285f4', Other: '#6b7280' };
+
+function drawStroke(x, s, W, H) {
+  if (!s.pts.length) return;
+  x.strokeStyle = s.color; x.lineWidth = s.size * W / 1000; x.lineCap = 'round'; x.lineJoin = 'round';
+  x.beginPath(); x.moveTo(s.pts[0][0] * W, s.pts[0][1] * H);
+  if (s.pts.length === 1) x.lineTo(s.pts[0][0] * W + 0.5, s.pts[0][1] * H);
+  for (let i = 1; i < s.pts.length; i++) x.lineTo(s.pts[i][0] * W, s.pts[i][1] * H);
+  x.stroke();
+}
+function tabSource(it) {
+  if (it.mode !== 'stream') return null;
+  const s = tabStreams.get(it.id);
+  if (it.streamer === me.id) return s && s.video.videoWidth ? s.video : null;
+  const im = tabFrames.get(it.id); return im && im.complete && im.naturalWidth ? im : null;
+}
+function screenSource(owner) {
+  if (owner === me.id && shareVideo && shareVideo.videoWidth) return shareVideo;
+  const im = frameImgs.get(owner); return im && im.complete && im.naturalWidth ? im : null;
+}
+function drawItem(x, it, W, H) {
+  const u = W / 1000, X = it.x * W, Y = it.y * H, w = it.w * W, h = it.h * H, pad = 11 * u;
+  x.save();
+  x.shadowColor = 'rgba(0,0,0,.2)'; x.shadowBlur = 12 * u; x.shadowOffsetY = 3 * u;
+  x.fillStyle = it.type === 'note' ? (it.laptop ? '#dbeafe' : '#fff3a8') : it.type === 'screen' ? '#0e1116' : '#ffffff';
+  rr(x, X, Y, w, h, 8 * u); x.fill();
+  x.shadowColor = 'transparent';
+  rr(x, X, Y, w, h, 8 * u); x.clip();
+  x.textBaseline = 'top';
+  const byLine = () => { x.fillStyle = 'rgba(0,0,0,.45)'; x.font = `${10 * u}px system-ui,sans-serif`; x.fillText((it.laptop ? 'from ' : '') + (it.by || ''), X + pad, Y + h - 16 * u); };
+  if (it.type === 'note') {
+    x.fillStyle = '#3b3a2e'; x.font = `500 ${15 * u}px system-ui,sans-serif`;
+    textBlock(x, it.text, X + pad, Y + pad, w - 2 * pad, 19.5 * u, h - 2 * pad - 14 * u); byLine();
+  } else if (it.type === 'link') {
+    x.fillStyle = '#e8eefc'; rr(x, X + pad, Y + pad, 32 * u, 32 * u, 7 * u); x.fill();
+    x.fillStyle = '#3d63c9'; x.font = `700 ${16 * u}px system-ui,sans-serif`; x.textAlign = 'center';
+    x.fillText((domainOf(it.url)[0] || '?').toUpperCase(), X + pad + 16 * u, Y + pad + 8 * u); x.textAlign = 'left';
+    x.fillStyle = '#111827'; x.font = `650 ${14 * u}px system-ui,sans-serif`;
+    const ty = textBlock(x, it.title, X + pad + 42 * u, Y + pad, w - 2 * pad - 42 * u, 17 * u, 36 * u);
+    x.fillStyle = '#6b7280'; x.font = `${11 * u}px system-ui,sans-serif`; x.fillText(domainOf(it.url), X + pad + 42 * u, Math.max(ty, Y + pad + 20 * u) + 2 * u);
+    x.fillStyle = '#2f62d6'; x.font = `600 ${12 * u}px system-ui,sans-serif`; x.fillText('Open ↗', X + pad, Y + h - 32 * u);
+    byLine();
+  } else if (it.type === 'ai') {
+    x.fillStyle = AI_COLORS[it.source] || AI_COLORS.Other; x.fillRect(X, Y, w, 26 * u);
+    x.fillStyle = '#fff'; x.font = `700 ${12 * u}px system-ui,sans-serif`; x.fillText('✦ ' + it.source + ' chat · pinned by ' + (it.by || ''), X + pad, Y + 7 * u);
+    x.fillStyle = '#111827'; x.font = `700 ${14.5 * u}px system-ui,sans-serif`;
+    const ty = textBlock(x, it.title, X + pad, Y + 34 * u, w - 2 * pad, 18 * u, 38 * u);
+    x.fillStyle = '#374151'; x.font = `${12 * u}px system-ui,sans-serif`;
+    textBlock(x, it.text, X + pad, ty + 6 * u, w - 2 * pad, 16 * u, Y + h - ty - 16 * u);
+  } else if (it.type === 'file') {
+    const isImg = it.mime && it.mime.startsWith('image/') && it.data;
+    if (isImg) {
+      const im = getImg('file-' + it.id, it.data);
+      const ah = h - 34 * u;
+      x.fillStyle = '#eef0f3'; x.fillRect(X, Y, w, ah);
+      if (im.complete && im.naturalWidth) { const s = Math.max(w / im.naturalWidth, ah / im.naturalHeight), iw = im.naturalWidth * s, ih = im.naturalHeight * s; x.save(); x.beginPath(); x.rect(X, Y, w, ah); x.clip(); x.drawImage(im, X + (w - iw) / 2, Y + (ah - ih) / 2, iw, ih); x.restore(); }
+      x.fillStyle = '#111827'; x.font = `600 ${11 * u}px system-ui,sans-serif`; x.fillText(it.name, X + pad, Y + ah + 6 * u);
+      x.fillStyle = '#6b7280'; x.font = `${10 * u}px system-ui,sans-serif`; x.fillText(fmtSize(it.size) + ' · ' + (it.by || ''), X + pad, Y + ah + 19 * u);
+    } else {
+      x.fillStyle = '#eef2ff'; rr(x, X + pad, Y + pad, 30 * u, 36 * u, 5 * u); x.fill();
+      x.fillStyle = '#4338ca'; x.font = `800 ${9 * u}px system-ui,sans-serif`; x.textAlign = 'center';
+      x.fillText((it.name.split('.').pop() || 'FILE').slice(0, 4).toUpperCase(), X + pad + 15 * u, Y + pad + 14 * u); x.textAlign = 'left';
+      x.fillStyle = '#111827'; x.font = `600 ${12.5 * u}px system-ui,sans-serif`;
+      textBlock(x, it.name, X + pad + 40 * u, Y + pad, w - 2 * pad - 40 * u, 15 * u, 32 * u);
+      x.fillStyle = '#6b7280'; x.font = `${10.5 * u}px system-ui,sans-serif`; x.fillText(fmtSize(it.size), X + pad + 40 * u, Y + pad + 33 * u);
+      byLine();
+    }
+  } else if (it.type === 'web') {
+    const hh = 24 * u;
+    x.fillStyle = '#e5e7eb'; x.fillRect(X, Y, w, hh);
+    ['#f87171', '#fbbf24', '#34d399'].forEach((c, i) => { x.fillStyle = c; x.beginPath(); x.arc(X + 12 * u + i * 11 * u, Y + hh / 2, 3.5 * u, 0, 7); x.fill(); });
+    let ux = X + 46 * u;
+    if (it.source && AI_COLORS[it.source]) {
+      x.font = `800 ${9.5 * u}px system-ui,sans-serif`; const bw = x.measureText(it.source).width + 10 * u;
+      x.fillStyle = AI_COLORS[it.source]; rr(x, ux, Y + 5 * u, bw, 14 * u, 3 * u); x.fill(); x.fillStyle = '#fff'; x.fillText(it.source, ux + 5 * u, Y + 7.5 * u); ux += bw + 6 * u;
+    }
+    x.fillStyle = '#fff'; rr(x, ux, Y + 4 * u, X + w - ux - 8 * u, 16 * u, 4 * u); x.fill();
+    x.fillStyle = '#4b5563'; x.font = `${10 * u}px system-ui,sans-serif`; x.fillText(domainOf(it.url) + new URL(it.url).pathname.replace(/\/$/, ''), ux + 6 * u, Y + 7.5 * u, X + w - ux - 20 * u);
+    const by = Y + hh, bh = h - hh, src = tabSource(it);
+    if (src) {
+      x.fillStyle = '#000'; x.fillRect(X, by, w, bh);
+      const sw = src.videoWidth || src.naturalWidth, sh = src.videoHeight || src.naturalHeight, sc = Math.min(w / sw, bh / sh);
+      x.drawImage(src, X + (w - sw * sc) / 2, by + (bh - sh * sc) / 2, sw * sc, sh * sc);
+      x.fillStyle = '#e5484d'; rr(x, X + w - 48 * u, by + 6 * u, 40 * u, 15 * u, 3 * u); x.fill(); x.fillStyle = '#fff'; x.font = `800 ${9.5 * u}px system-ui,sans-serif`; x.fillText('LIVE', X + w - 40 * u, by + 8.5 * u);
+    } else {
+      x.fillStyle = '#fff'; x.fillRect(X, by, w, bh);
+      x.textAlign = 'center'; x.fillStyle = '#111827'; x.font = `700 ${17 * u}px system-ui,sans-serif`; x.fillText(it.source || domainOf(it.url), X + w / 2, by + bh / 2 - 18 * u);
+      x.fillStyle = '#6b7280'; x.font = `${11 * u}px system-ui,sans-serif`; x.fillText(it.mode === 'stream' ? 'Waiting for the live tab…' : 'Live window · open the whiteboard to use it', X + w / 2, by + bh / 2 + 6 * u); x.textAlign = 'left';
+    }
+  } else if (it.type === 'screen') {
+    x.fillStyle = '#e5484d'; rr(x, X + pad, Y + 6 * u, 34 * u, 15 * u, 3 * u); x.fill();
+    x.fillStyle = '#fff'; x.font = `800 ${10 * u}px system-ui,sans-serif`; x.fillText('LIVE', X + pad + 6 * u, Y + 8.5 * u);
+    x.font = `600 ${11 * u}px system-ui,sans-serif`; x.fillText(it.title || 'Screen', X + pad + 42 * u, Y + 8 * u);
+    const bx = X, by = Y + 26 * u, bw = w, bh = h - 26 * u;
+    x.fillStyle = '#000'; x.fillRect(bx, by, bw, bh);
+    const src = screenSource(it.owner);
+    if (src) {
+      const sw = src.videoWidth || src.naturalWidth, sh = src.videoHeight || src.naturalHeight, s = Math.min(bw / sw, bh / sh);
+      x.drawImage(src, bx + (bw - sw * s) / 2, by + (bh - sh * s) / 2, sw * s, sh * s);
+    } else { x.fillStyle = '#9aa1b2'; x.font = `${12 * u}px system-ui,sans-serif`; x.fillText('Waiting for frames…', bx + pad, by + pad); }
+  }
+  x.restore();
+}
+function renderBoard() {
+  const x = bctx;
+  x.fillStyle = '#fbfbf8'; x.fillRect(0, 0, BW, BH);
+  x.strokeStyle = 'rgba(30,60,120,.06)'; x.lineWidth = 2;
+  for (let i = 0; i <= BW; i += 64) { x.beginPath(); x.moveTo(i, 0); x.lineTo(i, BH); x.stroke(); }
+  for (let j = 0; j <= BH; j += 64) { x.beginPath(); x.moveTo(0, j); x.lineTo(BW, j); x.stroke(); }
+  [...items.values()].sort((a, b) => (a.z || 0) - (b.z || 0)).forEach(it => drawItem(x, it, BW, BH));
+  for (const s of strokes.values()) drawStroke(x, s, BW, BH);
+  boardTex.needsUpdate = true;
+}
+
+// seed board (fixed ids so every tab agrees)
+function seedBoard() {
+  const seed = [
+    { id: 'seed-ai1', type: 'ai', source: 'Claude', by: 'Maya', x: .025, y: .05, w: .27, h: .6, z: 1, v: 1,
+      title: 'Krebs cycle, explained for BIOL 230',
+      text: 'Acetyl-CoA (2C) joins oxaloacetate (4C) to make citrate (6C).\n\nTwo decarboxylations release 2 CO₂ per turn.\n\nEach turn yields 3 NADH, 1 FADH₂ and 1 GTP/ATP.\n\nNADH and FADH₂ feed the electron transport chain, which makes most of the cell’s ATP.\n\nMnemonic: “Citrate Is Krebs’ Starting Substrate For Making Oxaloacetate.”' },
+    { id: 'seed-link', type: 'link', by: 'Jordan', x: .33, y: .06, w: .22, h: .14, z: 2, v: 1, url: 'https://arxiv.org/abs/1706.03762', title: 'Attention Is All You Need (Vaswani et al., 2017)' },
+    { id: 'seed-note', type: 'note', by: 'Priya', x: .6, y: .05, w: .16, h: .3, z: 3, v: 1, text: 'Exam 2 · Thu Nov 6\n• Ch. 7–9\n• Bring a calculator\n• Review session Tue 7pm' },
+    { id: 'seed-ai2', type: 'ai', source: 'ChatGPT', by: 'Jordan', x: .71, y: .43, w: .26, h: .5, z: 4, v: 1,
+      title: 'Why is my Lab 4 loop O(n²)?',
+      text: 'You call list.index() inside the for-loop, which scans the list on every iteration.\n\nFix: build a dict once, e.g. {value: i for i, value in enumerate(items)}, and then each lookup is O(1).\n\nTotal goes from O(n²) to O(n).' },
+  ];
+  for (const it of seed) if (!items.has(it.id)) items.set(it.id, it);
+  if (!strokes.has('seed-s1')) {
+    const pts = []; for (let a = 0.15; a < Math.PI * 1.85; a += 0.08) pts.push([.45 + Math.cos(a - Math.PI / 2) * .075, .6 + Math.sin(a - Math.PI / 2) * .15]);
+    strokes.set('seed-s1', { id: 'seed-s1', color: '#2563eb', size: 3.2, pts, by: 'Priya' });
+    const e = pts[pts.length - 1];
+    strokes.set('seed-s2', { id: 'seed-s2', color: '#2563eb', size: 3.2, pts: [[e[0] - .018, e[1] - .02], e, [e[0] + .004, e[1] + .045]], by: 'Priya' });
+    strokes.set('seed-s3', { id: 'seed-s3', color: '#dc2626', size: 2.6, pts: [[.605, .37], [.75, .37]], by: 'Priya' });
+  }
+  boardDirty = true;
+}
+seedBoard();
+
+// ---------- avatars
+function makeTag(name, color) {
+  const c = document.createElement('canvas'); c.width = 320; c.height = 72; const x = c.getContext('2d');
+  x.font = '600 30px system-ui,sans-serif'; const tw = Math.min(260, x.measureText(name).width);
+  const W = tw + 70; const X0 = (320 - W) / 2;
+  x.fillStyle = 'rgba(15,17,21,.78)'; rr(x, X0, 8, W, 54, 27); x.fill();
+  x.fillStyle = color; x.beginPath(); x.arc(X0 + 28, 35, 10, 0, 7); x.fill();
+  x.fillStyle = '#fff'; x.textBaseline = 'middle'; x.fillText(name, X0 + 48, 36, 260);
+  const t = new THREE.CanvasTexture(c); t.encoding = THREE.sRGBEncoding;
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, transparent: true, depthWrite: false }));
+  s.scale.set(1.0, 0.225, 1); return s;
+}
+function makeBadge(text, color) {
+  const c = document.createElement('canvas'); c.width = 200; c.height = 48; const x = c.getContext('2d');
+  x.fillStyle = color; rr(x, 4, 4, 192, 40, 20); x.fill(); x.fillStyle = '#fff'; x.font = '700 22px system-ui,sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(text, 100, 25);
+  const t = new THREE.CanvasTexture(c); t.encoding = THREE.sRGBEncoding;
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, transparent: true, depthWrite: false })); s.scale.set(0.5, 0.12, 1); return s;
+}
+function makeLaptop() {
+  const g = new THREE.Group();
+  const shell = mat(0xa3a9b2, { metalness: .6, roughness: .35 });
+  const base = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.015, 0.24), shell); base.position.y = 0.0075; base.castShadow = true; g.add(base);
+  const hinge = new THREE.Group(); hinge.position.set(0, 0.015, -0.12); hinge.rotation.x = 1.5; g.add(hinge); g.userData.hinge = hinge;
+  const lid = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.23, 0.012), shell); lid.position.y = 0.115; lid.castShadow = true; hinge.add(lid);
+  const scr = new THREE.Mesh(new THREE.PlaneGeometry(0.31, 0.2), new THREE.MeshBasicMaterial({ color: 0x9fc4ff })); scr.position.set(0, 0.115, 0.0065); hinge.add(scr);
+  g.position.set(0, 0.765, -0.58); return g;
+}
+function makeAvatar(name, color) {
+  const group = new THREE.Group(), inner = new THREE.Group();
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(0.19, 0.24, 0.9, 20), mat(new THREE.Color(color), { roughness: .55 })); body.position.y = 0.78; body.castShadow = true;
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.17, 24, 16), mat(0xf0d2b6, { roughness: .7 })); head.position.y = 1.4; head.castShadow = true;
+  const visor = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.07, 0.06), mat(0x1e2229, { roughness: .3 })); visor.position.set(0, 1.42, -0.14);
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(0.27, 0.018, 8, 48), new THREE.MeshBasicMaterial({ color: 0x4fd18b, transparent: true, opacity: 0 })); ring.rotation.x = Math.PI / 2; ring.position.y = 1.4;
+  const tag = makeTag(name, color); tag.position.y = 1.86;
+  const badge = makeBadge('🖥 SHARING', '#3d7be0'); badge.position.y = 2.05; badge.visible = false;
+  inner.add(body, head, visor, ring, tag, badge); group.add(inner);
+  const laptop = makeLaptop(); laptop.visible = false; group.add(laptop);
+  scene.add(group);
+  return { group, inner, ring, tag, badge, laptop };
+}
+function retag(av, name, color) { av.inner.remove(av.tag); av.tag = makeTag(name, color); av.tag.position.y = 1.86; av.inner.add(av.tag); }
+function poseAvatar(av, st, dt, snap) {
+  const seat = st.seat && seatById(st.seat);
+  const tx = seat ? seat.x : st.x, tz = seat ? seat.z : st.z, ty = seat ? seat.yaw : st.yaw;
+  const k = snap ? 1 : 1 - Math.exp(-dt * 12);
+  av.group.position.x += (tx - av.group.position.x) * k;
+  av.group.position.z += (tz - av.group.position.z) * k;
+  av.group.rotation.y = lerpAngle(av.group.rotation.y, ty, k);
+  av.inner.position.y += ((seat ? -0.42 : 0) - av.inner.position.y) * k;
+  av.laptop.visible = !!seat;
+  const lid = av.laptop.userData.hinge; lid.rotation.x += ((seat && st.working ? -0.28 : 1.5) - lid.rotation.x) * Math.min(1, k * 0.6);
+  const t = performance.now();
+  av.ring.material.opacity = st.speaking ? 0.55 + 0.35 * Math.sin(t * 0.015) : 0;
+  av.ring.scale.setScalar(st.speaking ? 1 + 0.07 * Math.sin(t * 0.02) : 1);
+  av.badge.visible = !!st.sharing;
+}
+const myAv = makeAvatar('me', me.color); myAv.inner.visible = false;
+
+// ---------- proximity
+function tableOf(seatId) { const s = seatId && seatById(seatId); return s ? s.table : null; }
+function prox(a, b) {
+  const ta = tableOf(a.seat), tb = tableOf(b.seat);
+  if (ta && ta === tb && !importedRoom) return { g: 1, label: 'same table' };
+  const d = Math.hypot(a.x - b.x, a.z - b.z);
+  if (d >= RANGE) return { g: 0, label: d.toFixed(1) + ' m · out of earshot' };
+  return { g: Math.pow(1 - d / RANGE, 1.3), label: d.toFixed(1) + ' m away' };
+}
+function occupant(seatId) {
+  if (me.seat === seatId) return me;
+  for (const p of peers.values()) if (p.state.seat === seatId) return p.state;
+  if (botsOn && !importedRoom) for (const b of bots) if (b.seat === seatId) return b;
+  return null;
+}
+
+// ---------- bots (simulated classmates)
+const WAYPOINTS = [[-1, -3.6, 7, 0], [1.6, -3.6, 5, 0], [0, 3.2, 3, null], [5.5, 3.6, 4, null], [5.8, -2.4, 6, -Math.PI / 2]];
+const bots = [
+  { id: 'bot-maya', name: 'Maya', color: '#ff8a80', pitch: 215, seat: 'A1', working: true, lines: ['Does anyone know if glycolysis is on Exam 2?', 'I pinned my Claude summary of the Krebs cycle on the board.', 'Can someone explain oxidative phosphorylation one more time?', 'Okay, focus mode. Back in 25.'] },
+  { id: 'bot-jordan', name: 'Jordan', color: '#69d29a', pitch: 118, seat: 'B2', sharing: true, lines: ['I’m sharing my Lab 4 code. Ask to view if you want to see it.', 'The attention paper is on the board. Section 3.2 is the key part.', 'Who wants this table for the group project?', 'Fixed it! The dict lookup made it so much faster.'] },
+  { id: 'bot-priya', name: 'Priya', color: '#c39bff', pitch: 182, seat: null, x: -1, z: -3.6, yaw: 0, way: 0, wait: 4, lines: ['I’ll sketch the cycle on the whiteboard.', 'Want to do a 25-minute focus block?', 'I posted the exam topics on the board.', 'Going to grab a window seat for a bit.'] },
+];
+for (const b of bots) {
+  const s = b.seat && seatById(b.seat);
+  if (s) { b.x = s.x; b.z = s.z; b.yaw = s.yaw; }
+  b.av = makeAvatar(b.name, b.color); poseAvatar(b.av, b, 0, true);
+  b.nextTalk = 2 + Math.random() * 6; b.talking = 0; b.li = Math.floor(Math.random() * b.lines.length); b.speaking = false;
+}
+function updateBot(b, dt) {
+  if (!botsOn || importedRoom) { b.speaking = false; return; }
+  if (!b.seat) {
+    const wp = WAYPOINTS[b.way], dx = wp[0] - b.x, dz = wp[1] - b.z, d = Math.hypot(dx, dz);
+    if (d > 0.05) {
+      if (b.wait > 0) { b.wait -= dt; if (wp[3] !== null) b.yaw = wp[3]; }
+      else { const st = Math.min(d, 1.15 * dt); b.x += dx / d * st; b.z += dz / d * st; b.yaw = Math.atan2(-dx, -dz); }
+    } else { b.wait = wp[2]; if (wp[3] !== null) b.yaw = wp[3]; b.way = (b.way + 1) % WAYPOINTS.length; }
+  }
+  b.nextTalk -= dt;
+  if (b.talking > 0) { b.talking -= dt; b.speaking = true; } else b.speaking = false;
+  if (b.nextTalk <= 0) {
+    b.talking = 1.5 + Math.random() * 3; b.nextTalk = b.talking + 7 + Math.random() * 13;
+    if (Math.random() < 0.55) { const line = b.lines[b.li++ % b.lines.length]; addChat({ name: b.name, color: b.color, text: line, g: prox(me, b).g, kind: 'sim' }); }
+  }
+}
+
+// ---------- input & movement
+const keys = new Set(), pad = { f: 0, b: 0, l: 0, r: 0 };
+const overlays = ['#wb', '#scan', '#help', '#modal', '#join'];
+const anyOverlay = () => overlays.some(s => !$(s).classList.contains('hidden'));
+function closeTopOverlay() {
+  for (const s of ['#modal', '#help', '#scan', '#wb']) if (!$(s).classList.contains('hidden')) { if (s === '#wb') closeBoard(); else $(s).classList.add('hidden'); return true; }
+  return false;
+}
+addEventListener('keydown', e => {
+  if (!joined) return;
+  if (isTyping(e.target)) { if (e.key === 'Escape') e.target.blur(); return; }
+  const k = e.key.toLowerCase();
+  if (e.key === 'Escape') { closeTopOverlay(); return; }
+  if (anyOverlay()) return;
+  keys.add(k);
+  if (k === 'e') toggleSit();
+  else if (k === 'b') openBoard();
+  else if (k === 'l') openDeskView();
+  else if (k === 'v') ptt = true;
+  else if (k === 'enter') { e.preventDefault(); $('#side').classList.remove('collapsed'); $('#chatIn').focus(); }
+  if (k.startsWith('arrow') || k === ' ') e.preventDefault();
+});
+addEventListener('keyup', e => { const k = e.key.toLowerCase(); keys.delete(k); if (k === 'v') ptt = false; });
+addEventListener('blur', () => { keys.clear(); ptt = false; });
+document.querySelectorAll('#pad button').forEach(b => {
+  const d = b.dataset.dir;
+  b.addEventListener('pointerdown', e => { e.preventDefault(); pad[d] = 1; b.setPointerCapture(e.pointerId); });
+  const up = () => { pad[d] = 0; }; b.addEventListener('pointerup', up); b.addEventListener('pointercancel', up);
+});
+
+function blocked(x, z) {
+  const R = 0.3;
+  if (x < bounds.minX || x > bounds.maxX || z < bounds.minZ || z > bounds.maxZ) return true;
+  for (const c of activeColliders()) if (x > c.minX - R && x < c.maxX + R && z > c.minZ - R && z < c.maxZ + R) return true;
+  return false;
+}
+function updateMe(dt) {
+  if (me.seat || anyOverlay()) return;
+  let f = 0, s = 0;
+  if (keys.has('w') || keys.has('arrowup') || pad.f) f += 1;
+  if (keys.has('s') || keys.has('arrowdown') || pad.b) f -= 1;
+  if (keys.has('d') || keys.has('arrowright') || pad.r) s += 1;
+  if (keys.has('a') || keys.has('arrowleft') || pad.l) s -= 1;
+  if (!f && !s) return;
+  const len = Math.hypot(f, s); f /= len; s /= len;
+  const sp = (keys.has('shift') ? 4.2 : 2.6) * dt;
+  const fx = -Math.sin(me.yaw), fz = -Math.cos(me.yaw), rx = Math.cos(me.yaw), rz = -Math.sin(me.yaw);
+  const nx = me.x + (fx * f + rx * s) * sp, nz = me.z + (fz * f + rz * s) * sp;
+  if (!blocked(nx, me.z)) me.x = nx;
+  if (!blocked(me.x, nz)) me.z = nz;
+}
+
+let dragLook = null;
+canvas.addEventListener('pointerdown', e => { if (!joined) return; dragLook = { x: e.clientX, y: e.clientY, moved: 0 }; try { canvas.setPointerCapture(e.pointerId); } catch {} });
+canvas.addEventListener('pointermove', e => {
+  if (!dragLook) return;
+  const dx = e.clientX - dragLook.x, dy = e.clientY - dragLook.y;
+  dragLook.x = e.clientX; dragLook.y = e.clientY; dragLook.moved += Math.abs(dx) + Math.abs(dy);
+  me.yaw -= dx * 0.0045; me.pitch = clamp(me.pitch - dy * 0.0035, -1.2, 1.1);
+});
+canvas.addEventListener('pointerup', e => { if (dragLook && dragLook.moved < 6) clickWorld(e); dragLook = null; });
+canvas.addEventListener('pointercancel', () => { dragLook = null; });
+const ray = new THREE.Raycaster();
+function clickWorld(e) {
+  const v = new THREE.Vector2((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
+  ray.setFromCamera(v, camera);
+  const targets = [boardSurface, ...seatClickables.filter(g => g.visible && (g.parent === customGroup || !importedRoom))];
+  const hit = ray.intersectObjects(targets, true)[0];
+  if (!hit) return;
+  if (hit.object === boardSurface) { openBoard(); return; }
+  const sid = hit.object.userData.seatId;
+  if (sid) {
+    const s = seatById(sid);
+    if (me.seat === sid) { stand(); return; }
+    if (Math.hypot(s.x - me.x, s.z - me.z) > 3.5) { toast('Walk a little closer to that chair.'); return; }
+    sit(s);
+  }
+}
+
+// ---------- sitting
+function nearestFreeSeat() {
+  let best = null, bd = 1.5;
+  for (const s of activeSeats()) { const d = Math.hypot(s.x - me.x, s.z - me.z); if (d < bd && !occupant(s.id)) { bd = d; best = s; } }
+  return best;
+}
+function sit(s) {
+  const occ = occupant(s.id);
+  if (occ && occ !== me) { toast(`${esc(occ.name)} is already sitting there.`); return; }
+  me.seat = s.id; me.x = s.x; me.z = s.z; me.yaw = s.yaw; me.pitch = -0.32;
+  const others = [...peers.values()].map(p => p.state).concat(botsOn && !importedRoom ? bots : []).filter(o => s.table && tableOf(o.seat) === s.table);
+  if (s.table && !importedRoom) toast(`Seated at <b>Table ${s.table}</b>. ${others.length ? 'You can now hear ' + others.map(o => esc(o.name)).join(', ') + ' clearly.' : 'People who sit here join your audio bubble.'} When you start working, press <b>L</b> to open your laptop, so your group sees you’re busy.`);
+
+}
+function stand() {
+  const s = seatById(me.seat); me.seat = null;
+  if (s) {
+    let nx = s.x + Math.sin(s.yaw) * 0.6, nz = s.z + Math.cos(s.yaw) * 0.6;
+    if (blocked(nx, nz)) { nx = s.x; nz = s.z; }
+    me.x = nx; me.z = nz;
+  }
+  me.pitch = -0.05;
+  if (deskWin && deskNeedsSeat) { deskWin.close(); closeDesk(); }
+}
+function toggleSit() {
+  if (me.seat) return stand();
+  const s = nearestFreeSeat();
+  if (s) sit(s); else toast('Walk up to an empty chair and press <b>E</b>, or click the chair.');
+}
+
+function updatePrompt() {
+  const p = $('#prompt'); let html = '', act = null;
+  if (anyOverlay()) { p.classList.add('hidden'); return; }
+  if (me.seat) {
+    const s = seatById(me.seat);
+    html = `Seated${s && s.table && !importedRoom ? ' at Table ' + s.table : ''} · <b>E</b> stand · <b>L</b> ${me.working ? 'close laptop' : 'open laptop (start working)'}`; act = stand;
+  } else {
+    const s = nearestFreeSeat();
+    const bd = Math.hypot(boardGroup.position.x - me.x, boardGroup.position.z - me.z);
+    if (s) { html = `<b>E</b> · Sit down${s.table && !importedRoom ? ' at Table ' + s.table : ''}`; act = () => sit(s); }
+    else if (bd < 4.2) { html = '<b>B</b> · Open the whiteboard'; act = openBoard; }
+  }
+  if (!html) { p.classList.add('hidden'); return; }
+  p.innerHTML = html; p.onclick = act; p.classList.remove('hidden');
+}
+
+// ---------- people panel
+const rows = new Map();
+function updatePeople() {
+  const ents = [{ id: me.id, name: me.name, color: me.color, kind: 'you', st: me }];
+  for (const [id, p] of peers) ents.push({ id, name: p.state.name, color: safeColor(p.state.color), kind: 'live', st: p.state });
+  if (botsOn && !importedRoom) for (const b of bots) ents.push({ id: b.id, name: b.name, color: b.color, kind: 'sim', st: b });
+  const box = $('#people'), seen = new Set();
+  for (const e of ents) {
+    seen.add(e.id);
+    let r = rows.get(e.id);
+    if (!r) {
+      r = document.createElement('div'); r.className = 'prow';
+      r.innerHTML = '<div class="pdot"></div><div class="pmain"><div class="pname"><span class="nm"></span><span class="kind"></span></div><div class="pstat"></div><div class="meter"><i></i></div></div><div class="pact"></div>';
+      box.appendChild(r); rows.set(e.id, r);
+    }
+    const dot = r.querySelector('.pdot'); dot.style.background = e.color; dot.textContent = (e.name[0] || '?').toUpperCase();
+    r.querySelector('.nm').textContent = e.name;
+    const kd = r.querySelector('.kind'); kd.textContent = e.kind === 'you' ? 'you' : e.kind === 'live' ? 'live tab' : 'simulated'; kd.className = 'kind' + (e.kind === 'live' ? ' live' : '');
+    const s = seatById(e.st.seat);
+    const where = e.st.seat ? (s && s.table && !importedRoom ? `Table ${s.table}` : 'Seated') : 'Walking around';
+    let stat = (e.st.speaking ? '🗣 ' : '') + (e.st.seat && e.st.working ? '💻 Working · ' : '') + where, g = 1;
+    if (e.kind !== 'you') { const p = prox(me, e.st); g = p.g; stat += ' · ' + p.label; }
+    else stat += me.speaking ? ' · speaking' : '';
+    if (e.st.sharing) stat += ' · 🖥';
+    r.querySelector('.pstat').textContent = stat;
+    const m = r.querySelector('.meter'); m.className = 'meter' + (e.st.speaking && g > 0 ? ' talk' : '');
+    m.querySelector('i').style.width = (e.kind === 'you' ? (me.speaking ? 100 : 0) : g * 100) + '%';
+    const act = r.querySelector('.pact'), want = e.kind !== 'you' && e.st.sharing ? (viewing === e.id ? 'watching' : 'view') : '';
+    if (act.dataset.s !== want) {
+      act.dataset.s = want;
+      act.innerHTML = want === 'view' ? `<button data-view="${esc(e.id)}">Ask to view</button>` : want === 'watching' ? '<span class="muted" style="font-size:11px">watching</span>' : '';
+    }
+  }
+  for (const [id, r] of rows) if (!seen.has(id)) { r.remove(); rows.delete(id); }
+  $('#pcount').textContent = ents.length + ' here';
+}
+$('#people').addEventListener('click', e => { const b = e.target.closest('[data-view]'); if (b) requestView(b.dataset.view); });
+
+// ---------- chat
+function addChat({ name, color, text, g = 1, roomWide = false, self = false, kind = '' }) {
+  const d = document.createElement('div');
+  const c = safeColor(color);
+  if (!self && !roomWide && g <= 0) {
+    d.className = 'msg far'; d.innerHTML = `<span class="who" style="color:${c}">${esc(name)}</span>said something across the room (too far away to hear)`;
+  } else {
+    d.className = 'msg'; d.style.opacity = self || roomWide ? 1 : (0.45 + 0.55 * g).toFixed(2);
+    d.innerHTML = `<span class="who" style="color:${c}">${esc(name)}</span>${roomWide ? '📣 ' : ''}${esc(text)}${kind === 'sim' ? '<span class="tag">sim</span>' : ''}`;
+  }
+  if (WALL && (self || roomWide || g > 0)) { wallMsgs.push({ name, color, text, t: Date.now() }); if (wallMsgs.length > 3) wallMsgs.shift(); }
+  const log = $('#chatLog'); log.appendChild(d);
+  while (log.children.length > 80) log.firstChild.remove();
+  log.scrollTop = log.scrollHeight;
+}
+function sysChat(text) { const d = document.createElement('div'); d.className = 'msg sys'; d.textContent = text; $('#chatLog').appendChild(d); $('#chatLog').scrollTop = 1e9; }
+$('#chatForm').addEventListener('submit', e => {
+  e.preventDefault();
+  const text = $('#chatIn').value.trim(); if (!text) return;
+  const roomWide = $('#roomWide').checked;
+  addChat({ name: me.name, color: me.color, text, self: true, roomWide });
+  send({ t: 'chat', text, x: me.x, z: me.z, seat: me.seat, roomWide, name: me.name, color: me.color });
+  $('#chatIn').value = ''; $('#chatIn').blur();
+});
+$('#sideToggle').onclick = () => $('#side').classList.toggle('collapsed');
+if (matchMedia('(max-width:760px)').matches) $('#side').classList.add('collapsed');
+
+// ---------- toasts & modal
+function toast(html, actions = [], ms = 4500) {
+  const t = document.createElement('div'); t.className = 'toast glass';
+  t.innerHTML = `<div>${html}</div>`;
+  if (actions.length) {
+    const a = document.createElement('div'); a.className = 'tact';
+    for (const [label, fn, primary] of actions) { const b = document.createElement('button'); b.textContent = label; if (primary) b.className = 'primary'; b.onclick = () => { t.remove(); fn(); }; a.appendChild(b); }
+    t.appendChild(a);
+  }
+  $('#toasts').appendChild(t);
+  if (ms) setTimeout(() => t.remove(), ms);
+  return t;
+}
+function openForm(title, fields, submitLabel, cb) {
+  const m = $('#modal'), f = $('#modalForm');
+  f.innerHTML = `<div class="sheet-h"><h3>${esc(title)}</h3><button type="button" class="x" data-close>×</button></div>` + fields.map(fd => {
+    const ctl = fd.type === 'textarea' ? `<textarea name="${fd.name}" rows="${fd.rows || 6}" placeholder="${esc(fd.ph || '')}"></textarea>`
+      : fd.type === 'select' ? `<select name="${fd.name}">${fd.options.map(o => `<option${o === fd.value ? ' selected' : ''}>${esc(o)}</option>`).join('')}</select>`
+      : `<input name="${fd.name}" placeholder="${esc(fd.ph || '')}">`;
+    return `<label>${esc(fd.label)}${ctl}</label>${fd.hint ? `<div class="hint">${fd.hint}</div>` : ''}`;
+  }).join('') + `<div class="mact"><button type="button" class="ghost" data-close>Cancel</button><button class="primary">${esc(submitLabel)}</button></div>`;
+  m.classList.remove('hidden');
+  setTimeout(() => f.querySelector('input,textarea')?.focus(), 30);
+  f.onsubmit = e => { e.preventDefault(); if (cb(Object.fromEntries(new FormData(f))) !== false) m.classList.add('hidden'); };
+  f.querySelectorAll('[data-close]').forEach(b => b.onclick = () => m.classList.add('hidden'));
+}
+document.querySelectorAll('.overlay [data-close]').forEach(b => b.addEventListener('click', () => b.closest('.overlay').classList.add('hidden')));
+document.querySelectorAll('.overlay.center').forEach(o => o.addEventListener('pointerdown', e => { if (e.target === o && o.id !== 'join') o.classList.add('hidden'); }));
+
+// ---------- whiteboard editor (2D)
+const wb = $('#wb'), wbBoard = $('#wbBoard'), wbInk = $('#wbInk'), wbItems = $('#wbItems'), ictx = wbInk.getContext('2d');
+let wbOpen = false, tool = 'select', penColor = '#1f2937', penSize = 3, curStroke = null, erasing = false, drag = null;
+const SW = ['#1f2937', '#2563eb', '#dc2626', '#16a34a', '#d97706', '#9333ea'];
+$('#swatches').innerHTML = SW.map((c, i) => `<button class="sw${i ? '' : ' on'}" data-c="${c}" style="background:${c}" title="Pen color"></button>`).join('');
+$('#swatches').onclick = e => { const b = e.target.closest('.sw'); if (!b) return; penColor = b.dataset.c; document.querySelectorAll('.sw').forEach(s => s.classList.toggle('on', s === b)); setTool('pen'); };
+function setTool(t) {
+  tool = t; document.querySelectorAll('[data-tool]').forEach(b => b.classList.toggle('on', b.dataset.tool === t));
+  wbBoard.classList.toggle('pen', t === 'pen'); wbBoard.classList.toggle('erase', t === 'erase');
+}
+document.querySelectorAll('[data-tool]').forEach(b => b.onclick = () => setTool(b.dataset.tool));
+function openBoard() { wbOpen = true; wb.classList.remove('hidden'); $('#prompt').classList.add('hidden'); layoutBoard(); syncItemsDOM(); }
+function closeBoard() { wbOpen = false; wb.classList.add('hidden'); if (document.activeElement && wb.contains(document.activeElement)) document.activeElement.blur(); }
+$('#closeBoard').onclick = closeBoard;
+function layoutBoard() {
+  if (!wbOpen) return;
+  const st = $('#wbStage').getBoundingClientRect();
+  let w = st.width - 40, h = w / 2;
+  if (h > st.height - 40) { h = st.height - 40; w = h * 2; }
+  wbBoard.style.width = w + 'px'; wbBoard.style.height = h + 'px'; wbBoard.style.fontSize = (w / 1000 * 15) + 'px';
+  const d = devicePixelRatio || 1; wbInk.width = Math.round(w * d); wbInk.height = Math.round(h * d);
+  redrawInk();
+}
+function redrawInk() {
+  if (!wbOpen) return;
+  ictx.clearRect(0, 0, wbInk.width, wbInk.height);
+  for (const s of strokes.values()) drawStroke(ictx, s, wbInk.width, wbInk.height);
+  if (curStroke) drawStroke(ictx, curStroke, wbInk.width, wbInk.height);
+}
+function itemHTML(it) {
+  const by = `<div class="by">${it.laptop ? 'from ' : ''}${esc(it.by || '')}</div>`;
+  switch (it.type) {
+    case 'note': return `<div class="note-body" contenteditable="true" spellcheck="false">${esc(it.text)}</div>${by}`;
+    case 'link': return `<div class="link-row"><div class="favi">${esc((domainOf(it.url)[0] || '?').toUpperCase())}</div><div class="link-meta"><div class="t">${esc(it.title)}</div><div class="d">${esc(domainOf(it.url))}</div></div></div><a class="open" href="${esc(it.url)}" target="_blank" rel="noopener noreferrer">Open ↗</a>${by}`;
+    case 'ai': return `<div class="ai-h" style="background:${AI_COLORS[it.source] || AI_COLORS.Other}"><span>✦ ${esc(it.source)} chat · ${esc(it.by || '')}</span>${it.url ? `<a href="${esc(it.url)}" target="_blank" rel="noopener noreferrer">open ↗</a>` : ''}</div><div class="ai-t">${esc(it.title)}</div><div class="ai-b">${esc(it.text)}</div>`;
+    case 'file': {
+      const isImg = it.mime && it.mime.startsWith('image/') && it.data;
+      const open = (it.data || localFiles.has(it.id)) ? `<a class="open" href="#" data-open="${esc(it.id)}">Open ↗</a>` : '<span class="by">Only on the uploader’s device (too large to sync between tabs)</span>';
+      if (isImg) return `<div class="file-img"><img src="${esc(it.data)}" alt=""></div><div class="by" style="padding-top:.4em"><b style="color:#111827">${esc(it.name)}</b> · ${fmtSize(it.size)} · ${esc(it.by || '')}</div>`;
+      return `<div class="file-row"><div class="ext">${esc((it.name.split('.').pop() || 'file').slice(0, 4).toUpperCase())}</div><div style="min-width:0"><div class="fname">${esc(it.name)}</div><div class="fsize">${fmtSize(it.size)}</div></div></div>${open}${by}`;
+    }
+    case 'web': {
+      const badge = it.source && AI_COLORS[it.source] ? `<span class="web-src" style="background:${AI_COLORS[it.source]}">${esc(it.source)}</span>` : '';
+      const streaming = it.mode === 'stream', mine = streaming && it.streamer === me.id, emb = embedInfo(it.url);
+      let body;
+      if (streaming) body = mine ? '<video autoplay muted playsinline></video>' : '<img class="tabframe" alt="">';
+      else if (!emb.ok) body = `<div class="web-blocked"><b>${esc(domainOf(it.url))} can’t run inside another page</b><span>Open it in your own browser tab, then stream that tab into this window. You stay signed in on your machine, and the group sees the live page. Nothing is scraped or copied.</span><div class="row2"><a href="${esc(it.url)}" target="_blank" rel="noopener noreferrer">1 · Open ${esc(domainOf(it.url))} ↗</a><button data-act="stream">2 · Stream that tab here</button></div></div>`;
+      else body = `<iframe src="${esc(emb.src)}" sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox" referrerpolicy="strict-origin-when-cross-origin" allow="clipboard-write; fullscreen"></iframe><div class="web-tip">Blank? The site may block embedding. Use ⦿ Stream tab instead.</div>`;
+      const btn = streaming ? (mine ? '■ Stop stream' : '● ' + esc(it.streamerName || 'Live')) : '⦿ Stream tab';
+      return `<div class="web-h">${badge}<input class="web-url" value="${esc(it.url)}" spellcheck="false" title="Type an address and press Enter"><button data-act="stream" class="${streaming ? 'live' : ''}">${btn}</button><a href="${esc(it.url)}" target="_blank" rel="noopener noreferrer" title="Open in a new tab">↗</a></div><div class="web-b">${body}</div>`;
+    }
+    case 'screen': return `<div class="scr-h"><span class="live-b">LIVE</span>${esc(it.title || 'Screen')}</div><div class="scr-b">${it.owner === me.id ? '<video autoplay muted playsinline></video>' : '<img class="frame" alt="">'}</div>`;
+  }
+  return '';
+}
+function upsertEl(it) {
+  let el = wbItems.querySelector(`[data-id="${it.id}"]`);
+  if (!el) { el = document.createElement('div'); el.dataset.id = it.id; el.dataset.owner = it.owner || ''; wbItems.appendChild(el); }
+  el.className = 'wbi t-' + it.type + (it.laptop ? ' lap' : '');
+  Object.assign(el.style, { left: it.x * 100 + '%', top: it.y * 100 + '%', width: it.w * 100 + '%', height: it.h * 100 + '%', zIndex: it.z || 1 });
+  if (el.dataset.v !== String(it.v) && !el.contains(document.activeElement)) {
+    el.innerHTML = itemHTML(it) + '<button class="del" title="Remove from board">×</button><div class="rs"></div>';
+    el.dataset.v = it.v;
+    if (it.type === 'web') {
+      const v = el.querySelector('.web-b video'), s = tabStreams.get(it.id); if (v && s) { v.srcObject = s.stream; v.play().catch(() => {}); }
+      const im = el.querySelector('img.tabframe'), f = tabFrames.get(it.id); if (im && f) im.src = f.src;
+    }
+    if (it.type === 'screen') {
+      const v = el.querySelector('video'); if (v && shareStream) { v.srcObject = shareStream; v.play().catch(() => {}); }
+      const im = el.querySelector('img.frame'), f = frameImgs.get(it.owner); if (im && f) im.src = f.src;
+    }
+  }
+}
+function syncItemsDOM() {
+  $('#wbCount').textContent = `${items.size} items · ${strokes.size} strokes`;
+  if (!wbOpen) return;
+  const seen = new Set();
+  for (const it of items.values()) { seen.add(it.id); upsertEl(it); }
+  for (const el of [...wbItems.children]) if (!seen.has(el.dataset.id)) el.remove();
+}
+function boardXY(e) { const r = wbBoard.getBoundingClientRect(); return [clamp((e.clientX - r.left) / r.width, 0, 1), clamp((e.clientY - r.top) / r.height, 0, 1)]; }
+function eraseAt(nx, ny) {
+  const del = [];
+  for (const s of strokes.values()) if (s.pts.some(p => Math.hypot((p[0] - nx) * 2, p[1] - ny) < 0.025)) del.push(s.id);
+  if (!del.length) return;
+  del.forEach(id => strokes.delete(id)); send({ t: 'strokeDel', ids: del }); boardDirty = true; redrawInk(); syncItemsDOM();
+}
+wbBoard.addEventListener('pointerdown', e => {
+  const [nx, ny] = boardXY(e);
+  if (tool === 'pen') { curStroke = { id: rid(), color: penColor, size: penSize, pts: [[nx, ny]], by: me.name }; wbBoard.setPointerCapture(e.pointerId); redrawInk(); return; }
+  if (tool === 'erase') { erasing = true; wbBoard.setPointerCapture(e.pointerId); eraseAt(nx, ny); return; }
+  const el = e.target.closest('.wbi'); if (!el) return;
+  const it = items.get(el.dataset.id); if (!it) return;
+  if (e.target.closest('.del')) { deleteItem(it.id); return; }
+  if (e.target.closest('a,[contenteditable],.ai-b,input,button,.web-b')) return;
+  it.z = ++zTop; el.style.zIndex = it.z;
+  drag = { it, resize: !!e.target.closest('.rs'), sx: nx, sy: ny, ox: it.x, oy: it.y, ow: it.w, oh: it.h, last: 0 };
+  wbBoard.setPointerCapture(e.pointerId); e.preventDefault();
+});
+wbBoard.addEventListener('pointermove', e => {
+  if (!curStroke && !erasing && !drag) return;
+  const [nx, ny] = boardXY(e);
+  if (curStroke) { curStroke.pts.push([+nx.toFixed(4), +ny.toFixed(4)]); redrawInk(); return; }
+  if (erasing) { eraseAt(nx, ny); return; }
+  const it = drag.it;
+  if (drag.resize) { it.w = clamp(drag.ow + nx - drag.sx, .07, 1 - it.x); it.h = clamp(drag.oh + ny - drag.sy, .08, 1 - it.y); }
+  else { it.x = clamp(drag.ox + nx - drag.sx, 0, 1 - it.w); it.y = clamp(drag.oy + ny - drag.sy, 0, 1 - it.h); }
+  upsertEl(it); boardDirty = true;
+  const now = performance.now();
+  if (now - drag.last > 50) { drag.last = now; send({ t: 'itemMove', id: it.id, x: it.x, y: it.y, w: it.w, h: it.h, z: it.z }); }
+});
+function endBoardPointer() {
+  if (curStroke) { const s = curStroke; curStroke = null; strokes.set(s.id, s); send({ t: 'stroke', stroke: s }); boardDirty = true; redrawInk(); syncItemsDOM(); }
+  if (drag) { const it = drag.it; drag = null; send({ t: 'itemMove', id: it.id, x: it.x, y: it.y, w: it.w, h: it.h, z: it.z }); }
+  erasing = false;
+}
+wbBoard.addEventListener('pointerup', endBoardPointer);
+wbBoard.addEventListener('pointercancel', endBoardPointer);
+const noteTimers = new Map();
+wbItems.addEventListener('input', e => {
+  const el = e.target.closest('.wbi'), it = el && items.get(el.dataset.id);
+  if (!it || it.type !== 'note') return;
+  it.text = e.target.innerText; it.v++; el.dataset.v = it.v; boardDirty = true;
+  clearTimeout(noteTimers.get(it.id)); noteTimers.set(it.id, setTimeout(() => send({ t: 'item', item: it }), 250));
+});
+wbItems.addEventListener('change', e => {
+  if (!e.target.classList.contains('web-url')) return;
+  const el = e.target.closest('.wbi'), it = el && items.get(el.dataset.id); if (!it) return;
+  const raw = e.target.value.trim(), u = safeUrl(/^https?:\/\//i.test(raw) ? raw : 'https://' + raw);
+  if (!u) { e.target.value = it.url; toast('That doesn’t look like a web address.'); return; }
+  if (u === it.url) return;
+  if (it.mode === 'stream') stopTabStream(it.id);
+  it.url = u; it.mode = 'embed'; it.v++; boardDirty = true; send({ t: 'item', item: it }); syncItemsDOM();
+});
+wbItems.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.classList.contains('web-url')) e.target.blur(); });
+wbItems.addEventListener('click', async e => {
+  const st = e.target.closest('[data-act="stream"]');
+  if (st) { const el = st.closest('.wbi'); if (el) streamTabInto(el.dataset.id); return; }
+  const a = e.target.closest('[data-open]'); if (!a) return;
+  e.preventDefault();
+  const it = items.get(a.dataset.open); if (!it) return;
+  let url = localFiles.get(it.id);
+  if (!url && it.data) { const blob = await (await fetch(it.data)).blob(); url = URL.createObjectURL(blob); localFiles.set(it.id, url); }
+  if (url) window.open(url, '_blank', 'noopener');
+});
+
+function addItem(o) {
+  const it = Object.assign({ id: rid(), x: .08 + Math.random() * .45, y: .1 + Math.random() * .35, w: .18, h: .24, z: ++zTop, v: 1, by: me.name, owner: me.id }, o);
+  it.x = clamp(it.x, 0, 1 - it.w); it.y = clamp(it.y, 0, 1 - it.h);
+  items.set(it.id, it); boardDirty = true; syncItemsDOM(); send({ t: 'item', item: it }); return it;
+}
+function deleteItem(id) { if (tabStreams.has(id)) stopTabStream(id); if (!items.delete(id)) return; boardDirty = true; syncItemsDOM(); send({ t: 'itemDel', id }); }
+
+$('#addNote').onclick = () => { const it = addItem({ type: 'note', text: 'New note' }); setTool('select'); setTimeout(() => { const b = wbItems.querySelector(`[data-id="${it.id}"] .note-body`); if (b) { b.focus(); document.getSelection().selectAllChildren(b); } }, 30); };
+$('#addLink').onclick = () => openForm('Pin a website', [
+  { name: 'url', label: 'Web address', ph: 'https://…' },
+  { name: 'title', label: 'Label (optional)', ph: 'e.g. Lecture 9 slides' },
+], 'Pin to board', d => {
+  const raw = (d.url || '').trim(); const u = safeUrl(/^https?:\/\//i.test(raw) ? raw : 'https://' + raw);
+  if (!raw || !u) { toast('That doesn’t look like a web address.'); return false; }
+  addItem({ type: 'link', url: u, title: (d.title || '').trim() || domainOf(u), w: .22, h: .15 });
+});
+// Live windows: real pages on the board, so nothing needs scraping or copy-pasting.
+const NO_EMBED = ['claude.ai', 'chatgpt.com', 'chat.openai.com', 'gemini.google.com', 'google.com', 'github.com', 'x.com', 'twitter.com', 'facebook.com', 'instagram.com', 'linkedin.com', 'notion.so', 'perplexity.ai'];
+const AI_HOME = { Claude: 'https://claude.ai/new', ChatGPT: 'https://chatgpt.com/', Gemini: 'https://gemini.google.com/app' };
+function embedInfo(u) {
+  try {
+    const x = new URL(u), h = x.hostname.replace(/^www\./, '');
+    if ((h === 'youtube.com' || h === 'm.youtube.com') && x.searchParams.get('v')) return { src: 'https://www.youtube.com/embed/' + encodeURIComponent(x.searchParams.get('v')), ok: true };
+    if (h === 'youtu.be') return { src: 'https://www.youtube.com/embed/' + encodeURIComponent(x.pathname.slice(1)), ok: true };
+    if (h === 'docs.google.com' && /\/(edit|view)/.test(x.pathname)) return { src: x.origin + x.pathname.replace(/\/(edit|view).*$/, '/preview'), ok: true };
+    return { src: u, ok: !NO_EMBED.some(d => h === d || h.endsWith('.' + d)) };
+  } catch { return { src: u, ok: false }; }
+}
+function liveWindowForm(preset = 'Claude') {
+  openForm('Open a live window', [
+    { name: 'preset', label: 'Window', type: 'select', value: preset, options: ['Claude', 'ChatGPT', 'Gemini', 'Any website'] },
+    { name: 'url', label: 'Address (optional for AI chats, e.g. a specific conversation)', ph: 'https://…', hint: 'AI chats open as a <b>live window</b>, not a pasted copy. Claude and ChatGPT don’t allow embedding, so you stream your own signed-in tab into the window. Your login never leaves your machine. Ordinary websites load right inside the card.' },
+  ], 'Open window', d => {
+    const raw = (d.url || '').trim();
+    const u = raw ? safeUrl(/^https?:\/\//i.test(raw) ? raw : 'https://' + raw) : AI_HOME[d.preset];
+    if (!u) { toast('Enter a web address.'); return false; }
+    const host = domainOf(u), source = Object.keys(AI_HOME).find(k => domainOf(AI_HOME[k]) === host || (k === 'ChatGPT' && host === 'chat.openai.com')) || null;
+    addItem({ type: 'web', url: u, source, mode: 'embed', w: .36, h: .56 });
+    if (!wbOpen) toast('Added a live window to the whiteboard.', [['Open board', openBoard, true]]);
+  });
+}
+function aiForm() {
+  openForm('Add an AI chat', [
+    { name: 'kind', label: 'How should it appear?', type: 'select', options: ['Live window: the real chat, streamed from your tab', 'Snapshot: paste part of a conversation'] },
+  ], 'Next', d => { setTimeout(() => d.kind.startsWith('Live') ? liveWindowForm('Claude') : snapshotForm(), 0); });
+}
+function snapshotForm() {
+  openForm('Pin an AI chat snapshot', [
+    { name: 'source', label: 'From', type: 'select', options: ['Claude', 'ChatGPT', 'Gemini', 'Other'] },
+    { name: 'title', label: 'Title', ph: 'What was the question?' },
+    { name: 'url', label: 'Share link (optional)', ph: 'https://claude.ai/share/…' },
+    { name: 'text', label: 'Conversation or output', type: 'textarea', rows: 7, ph: 'Paste the part of the chat the group needs…', hint: 'In the full product, a browser extension adds a “Pin to Commons” button to Claude and ChatGPT, so this takes one click.' },
+  ], 'Pin to board', d => {
+    if (!d.text.trim() && !d.title.trim()) { toast('Paste some of the chat first.'); return false; }
+    addItem({ type: 'ai', source: d.source, title: d.title.trim() || 'Untitled chat', url: safeUrl(d.url.trim()), text: d.text.trim(), w: .26, h: .46 });
+    if (!wbOpen) toast('Pinned to the whiteboard.', [['Open board', openBoard, true]]);
+  });
+}
+$('#addAI').onclick = aiForm;
+$('#addWeb').onclick = () => liveWindowForm('Any website');
+$('#addFile').onclick = () => $('#fileIn').click();
+$('#fileIn').onchange = async e => {
+  for (const f of e.target.files) {
+    const isImg = f.type.startsWith('image/');
+    let data = null; if (f.size <= 3.5e6) { try { data = await readURL(f); } catch {} }
+    const it = addItem({ type: 'file', name: f.name, size: f.size, mime: f.type, data, w: isImg ? .2 : .18, h: isImg ? .32 : .16 });
+    if (!data) { localFiles.set(it.id, URL.createObjectURL(f)); it.v++; syncItemsDOM(); }
+  }
+  e.target.value = '';
+};
+$('#addScreen').onclick = pinMyScreen;
+
+// ---------- live-window tab streams
+const tabStreams = new Map(), tabFrames = new Map();
+async function streamTabInto(id) {
+  const it = items.get(id); if (!it) return;
+  if (it.mode === 'stream') { if (it.streamer === me.id) stopTabStream(id); else toast(`${esc(it.streamerName || 'Someone')} is streaming this window. Only they can change it.`); return; }
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) { toast('Tab streaming needs desktop Chrome, Edge, Firefox or Safari.'); return; }
+  let stream;
+  try {
+    stream = await navigator.mediaDevices.getDisplayMedia({ video: { displaySurface: 'browser', frameRate: 15 }, audio: false, selfBrowserSurface: 'exclude', surfaceSwitching: 'include', preferCurrentTab: false });
+  } catch { toast('Tab streaming was cancelled.'); return; }
+  const video = document.createElement('video'); video.muted = true; video.playsInline = true; video.srcObject = stream; video.play().catch(() => {});
+  const c = document.createElement('canvas');
+  const timer = setInterval(() => {
+    if (!video.videoWidth) return;
+    const W = 800, H = Math.round(W * video.videoHeight / video.videoWidth);
+    c.width = W; c.height = H; c.getContext('2d').drawImage(video, 0, 0, W, H);
+    send({ t: 'tabFrame', id, data: c.toDataURL('image/jpeg', .65) });
+  }, 300);
+  tabStreams.set(id, { stream, video, timer });
+  stream.getVideoTracks()[0].addEventListener('ended', () => stopTabStream(id));
+  Object.assign(it, { mode: 'stream', streamer: me.id, streamerName: me.name }); it.v++;
+  send({ t: 'item', item: it }); boardDirty = true; syncItemsDOM();
+  toast('This window now shows your tab live. Everyone sees it update, and only you control it.');
+}
+function stopTabStream(id) {
+  const s = tabStreams.get(id);
+  if (s) { s.stream.getTracks().forEach(t => t.stop()); clearInterval(s.timer); tabStreams.delete(id); }
+  const it = items.get(id);
+  if (it && it.streamer === me.id) { it.mode = 'embed'; it.streamer = null; it.v++; send({ t: 'item', item: it }); boardDirty = true; syncItemsDOM(); }
+}
+
+// ---------- screen share
+let shareStream = null, shareVideo = null, shareTimer = null, viewing = null;
+const viewers = new Set(), grabC = document.createElement('canvas');
+async function startShare() {
+  if (shareStream) return true;
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) { toast('Screen sharing isn’t available here. Try desktop Chrome, Edge, Firefox or Safari, opened as a normal tab.'); return false; }
+  try { shareStream = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: 15 }, audio: false }); }
+  catch (e) { toast(e && e.name === 'NotAllowedError' ? 'Screen share was cancelled or blocked.' : 'Couldn’t start a screen share: ' + esc(e && e.message)); return false; }
+  shareVideo = document.createElement('video'); shareVideo.muted = true; shareVideo.playsInline = true; shareVideo.srcObject = shareStream; shareVideo.play().catch(() => {});
+  shareStream.getVideoTracks()[0].addEventListener('ended', stopShare);
+  me.sharing = true; shareTimer = setInterval(pushFrame, 350); updateShareChip();
+  setTimeout(() => { if (me.sharing && botsOn && !importedRoom) botRequestView(); }, 6500);
+  return true;
+}
+function stopShare() {
+  if (!shareStream) return;
+  shareStream.getTracks().forEach(t => t.stop()); shareStream = null; shareVideo = null; clearInterval(shareTimer);
+  me.sharing = false; viewers.clear();
+  for (const it of [...items.values()]) if (it.type === 'screen' && it.owner === me.id) deleteItem(it.id);
+  send({ t: 'shareEnd' }); updateShareChip();
+}
+const myScreenItem = () => [...items.values()].find(it => it.type === 'screen' && it.owner === me.id);
+function pushFrame() {
+  if (!shareVideo || !shareVideo.videoWidth) return;
+  const live = [...viewers].filter(v => peers.has(v)), pub = !!myScreenItem();
+  if (!live.length && !pub) return;
+  const w = 720, h = Math.round(w * shareVideo.videoHeight / shareVideo.videoWidth);
+  grabC.width = w; grabC.height = h; grabC.getContext('2d').drawImage(shareVideo, 0, 0, w, h);
+  send({ t: 'frame', data: grabC.toDataURL('image/jpeg', .62), to: live, pub });
+}
+async function pinMyScreen() {
+  if (!await startShare()) return;
+  if (!myScreenItem()) addItem({ type: 'screen', title: me.name + '’s screen', x: .32, y: .3, w: .36, h: .45 });
+  updateShareChip();
+}
+function updateShareChip() {
+  const chip = $('#shareChip');
+  $('#shareBtn').classList.toggle('live', me.sharing);
+  $('#shareBtn').querySelector('.lbl').textContent = me.sharing ? 'Sharing…' : 'Share screen';
+  if (!me.sharing) { chip.classList.add('hidden'); return; }
+  const names = [...viewers].map(id => peers.get(id)?.state.name || bots.find(b => b.id === id)?.name).filter(Boolean);
+  const pinned = !!myScreenItem();
+  $('#shareTxt').textContent = 'Sharing your screen' + (pinned ? ' · on the whiteboard' : '') + ' · ' + (names.length ? 'viewers: ' + names.join(', ') : 'nobody is viewing yet');
+  $('#pinBtn').textContent = pinned ? 'Unpin from board' : 'Pin to whiteboard';
+  chip.classList.remove('hidden');
+}
+$('#shareBtn').onclick = () => me.sharing ? stopShare() : startShare().then(ok => ok && toast('You’re sharing. People must <b>ask</b> before they can see it, and you approve each request. You can also pin it to the whiteboard for everyone.', [], 6000));
+$('#stopShareBtn').onclick = stopShare;
+$('#pinBtn').onclick = () => { const it = myScreenItem(); if (it) { deleteItem(it.id); updateShareChip(); } else pinMyScreen(); };
+
+function requestView(id) {
+  const bot = bots.find(b => b.id === id);
+  if (bot) { toast(`Asked ${esc(bot.name)} to share their screen…`, [], 1500); setTimeout(() => { openViewer(id, bot.name); sysChat(`${bot.name} allowed you to view their screen.`); }, 1400); return; }
+  const p = peers.get(id); if (!p) return;
+  send({ t: 'viewReq', to: id }); toast(`Asked ${esc(p.state.name)} to view their screen. Waiting for them to approve…`, [], 3000);
+}
+function handleViewReq(from) {
+  const p = peers.get(from), name = p ? p.state.name : 'Someone';
+  if (!me.sharing) { send({ t: 'viewResp', to: from, ok: false }); return; }
+  toast(`<b>${esc(name)}</b> wants to view your screen.`, [
+    ['Deny', () => send({ t: 'viewResp', to: from, ok: false })],
+    ['Allow', () => { viewers.add(from); send({ t: 'viewResp', to: from, ok: true }); updateShareChip(); }, true],
+  ], 0);
+}
+function botRequestView() {
+  toast('<b>Priya</b> <span class="muted">(simulated)</span> wants to view your screen.', [
+    ['Deny', () => sysChat('You declined Priya’s request.')],
+    ['Allow', () => { viewers.add('bot-priya'); updateShareChip(); sysChat('Priya is now viewing your screen.'); }, true],
+  ], 0);
+}
+function openViewer(id, name) {
+  viewing = id; $('#viewerTitle').textContent = `${name}’s screen · private view`;
+  const body = $('#viewerBody'); body.innerHTML = '';
+  if (id.startsWith('bot-')) body.appendChild(fake.canvas);
+  else { const im = document.createElement('img'); im.id = 'viewerImg'; im.alt = ''; const f = frameImgs.get(id); if (f) im.src = f.src; body.appendChild(im); }
+  $('#viewer').classList.remove('hidden'); updatePeople();
+}
+function closeViewer() { if (viewing && !viewing.startsWith('bot-')) send({ t: 'viewLeave', to: viewing }); viewing = null; $('#viewer').classList.add('hidden'); updatePeople(); }
+$('#viewerClose').onclick = closeViewer;
+
+// fake screen for Jordan
+const fake = { canvas: document.createElement('canvas'), t: 0 };
+fake.canvas.width = 800; fake.canvas.height = 500;
+const FAKE_CODE = ['# lab4.py: duplicate finder', 'def find_pairs(items, target):', '    seen = {v: i for i, v in enumerate(items)}', '    pairs = []', '    for i, v in enumerate(items):', '        j = seen.get(target - v)', '        if j is not None and j > i:', '            pairs.append((i, j))', '    return pairs', '', '', 'if __name__ == "__main__":', '    data = load("scores.csv")', '    print(find_pairs(data, 100))', '    # was O(n²) with list.index(), now O(n)'];
+function drawFake(dt) {
+  fake.t += dt; const x = fake.canvas.getContext('2d');
+  x.fillStyle = '#1e1e2e'; x.fillRect(0, 0, 800, 500);
+  x.fillStyle = '#181825'; x.fillRect(0, 0, 170, 500); x.fillRect(0, 0, 800, 30);
+  x.fillStyle = '#cdd6f4'; x.font = '13px system-ui,sans-serif'; x.fillText('jordan — lab4.py', 330, 20);
+  ['▾ LAB4', '  lab4.py', '  scores.csv', '  test_lab4.py', '  README.md'].forEach((f, i) => { x.fillStyle = i === 1 ? '#89b4fa' : '#9399b2'; x.fillText(f, 14, 56 + i * 22); });
+  const chars = Math.floor(fake.t * 28) % 700;
+  let left = chars; x.font = '15px ui-monospace,Menlo,monospace';
+  FAKE_CODE.forEach((l, i) => {
+    const y = 60 + i * 24; x.fillStyle = '#585b70'; x.fillText(String(i + 1).padStart(2), 186, y);
+    const shown = l.slice(0, Math.max(0, left)); left -= l.length + 1;
+    x.fillStyle = l.trim().startsWith('#') ? '#6c7086' : /^\s*(def|for|if|return)/.test(l) ? '#cba6f7' : '#cdd6f4'; x.fillText(shown, 222, y);
+    if (left < 0 && left > -l.length - 2 && Math.floor(fake.t * 2) % 2) { const w = x.measureText(shown).width; x.fillStyle = '#f5e0dc'; x.fillRect(223 + w, y - 14, 2, 18); }
+  });
+  x.fillStyle = '#11111b'; x.fillRect(170, 420, 630, 80); x.fillStyle = '#a6e3a1'; x.font = '13px ui-monospace,monospace'; x.fillText('$ python lab4.py   →   [(2, 17), (5, 9)]   0.004s', 186, 450);
+}
+
+// ---------- audio: mic level + spatial "voices"
+let ac = null, master = null, analyser = null, micStream = null, micBuf = null;
+function ensureAudio() {
+  if (ac) { ac.resume?.(); return; }
+  try { ac = new (window.AudioContext || window.webkitAudioContext)(); master = ac.createGain(); master.gain.value = 0.14; master.connect(ac.destination); } catch { ac = null; return; }
+  for (const b of bots) {
+    const o = ac.createOscillator(); o.type = 'sawtooth'; o.frequency.value = b.pitch;
+    const f = ac.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 900; f.Q.value = 1.6;
+    const env = ac.createGain(); env.gain.value = 0; const pg = ac.createGain(); pg.gain.value = 0;
+    const pan = ac.createPanner(); pan.panningModel = 'HRTF'; pan.distanceModel = 'linear'; pan.rolloffFactor = 0;
+    o.connect(f); f.connect(env); env.connect(pg); pg.connect(pan); pan.connect(master); o.start();
+    b.voice = { o, f, env, pg, pan, next: 0 };
+  }
+}
+function setPos(node, x, y, z) { if (node.positionX) { node.positionX.value = x; node.positionY.value = y; node.positionZ.value = z; } else node.setPosition(x, y, z); }
+function updateAudio() {
+  if (!ac) return;
+  const t = ac.currentTime, L = ac.listener, fx = -Math.sin(me.yaw), fz = -Math.cos(me.yaw), ey = me.seat ? 1.12 : 1.6;
+  setPos(L, me.x, ey, me.z);
+  if (L.forwardX) { L.forwardX.value = fx; L.forwardY.value = 0; L.forwardZ.value = fz; L.upX.value = 0; L.upY.value = 1; L.upZ.value = 0; } else L.setOrientation(fx, 0, fz, 0, 1, 0);
+  for (const b of bots) {
+    const v = b.voice; if (!v) continue;
+    const on = voicesOn && botsOn && !importedRoom;
+    v.pg.gain.setTargetAtTime(on ? prox(me, b).g : 0, t, .15);
+    setPos(v.pan, b.x, b.seat ? 1.1 : 1.45, b.z);
+    if (b.speaking) {
+      if (t > v.next) {
+        v.next = t + 0.09 + Math.random() * 0.16;
+        v.env.gain.setTargetAtTime(Math.random() < .18 ? 0.02 : 0.35 + Math.random() * 0.65, t, .03);
+        v.o.frequency.setTargetAtTime(b.pitch * (0.85 + Math.random() * 0.35), t, .04);
+        v.f.frequency.setTargetAtTime(600 + Math.random() * 900, t, .05);
+      }
+    } else v.env.gain.setTargetAtTime(0, t, .06);
+  }
+}
+async function toggleMic() {
+  const btn = $('#micBtn');
+  if (micStream) { micStream.getTracks().forEach(t => t.stop()); micStream = null; analyser = null; btn.classList.remove('on'); btn.querySelector('.lbl').textContent = 'Mic off'; btn.style.setProperty('--lvl', 0); return; }
+  ensureAudio();
+  try {
+    micStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
+    const src = ac.createMediaStreamSource(micStream); analyser = ac.createAnalyser(); analyser.fftSize = 1024; src.connect(analyser);
+    micBuf = new Float32Array(analyser.fftSize);
+    btn.classList.add('on'); btn.querySelector('.lbl').textContent = 'Mic on';
+    toast('Your mic now lights up your speaking ring for everyone. Voice itself isn’t sent in this prototype; that would go through WebRTC.');
+  } catch { micStream = null; toast('The mic is blocked or unavailable. Hold <b>V</b> to show yourself talking instead.'); }
+}
+function updateMic() {
+  let lvl = 0;
+  if (analyser) { analyser.getFloatTimeDomainData(micBuf); let s = 0; for (const v of micBuf) s += v * v; lvl = Math.sqrt(s / micBuf.length); $('#micBtn').style.setProperty('--lvl', Math.min(1, lvl * 12).toFixed(2)); }
+  me.speaking = ptt || lvl > 0.035;
+}
+$('#micBtn').onclick = toggleMic;
+$('#voiceBtn').onclick = () => { ensureAudio(); voicesOn = !voicesOn; $('#voiceBtn').classList.toggle('on', voicesOn); toast(voicesOn ? 'Room audio is on. Simulated classmates get quieter with distance and you can tell which direction they’re in.' : 'Room audio is muted.', [], 2500); };
+
+// ---------- scan / import
+$('#scanBtn').onclick = () => $('#scan').classList.remove('hidden');
+$('#helpBtn').onclick = () => $('#help').classList.remove('hidden');
+$('#boardBtn').onclick = openBoard;
+const drop = $('#drop');
+$('#glbIn').onchange = e => { const f = e.target.files[0]; if (f) importFile(f); e.target.value = ''; };
+drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('over'); });
+drop.addEventListener('dragleave', () => drop.classList.remove('over'));
+drop.addEventListener('drop', e => { e.preventDefault(); drop.classList.remove('over'); const f = e.dataTransfer.files[0]; if (f) importFile(f); });
+async function importFile(f) {
+  if (!/\.glb$/i.test(f.name)) { $('#scanStatus').textContent = 'Please use a binary .glb. A .gltf that references separate files can’t load from a single drop.'; return; }
+  $('#scanStatus').textContent = `Loading ${f.name} (${fmtSize(f.size)})…`;
+  loadRoomBuffer(await f.arrayBuffer(), f.name, true);
+}
+function loadRoomBuffer(buf, name, broadcast) {
+  if (!THREE.GLTFLoader) { toast('The glTF loader didn’t load. Check your connection.'); return; }
+  new THREE.GLTFLoader().parse(buf.slice(0), '', gltf => {
+    if (importedRoom) scene.remove(importedRoom);
+    const room = gltf.scene;
+    let bx = new THREE.Box3().setFromObject(room), size = bx.getSize(new THREE.Vector3()), maxd = Math.max(size.x, size.y, size.z);
+    if (maxd > 60) room.scale.setScalar(20 / maxd); else if (maxd < 0.5) room.scale.setScalar(8 / maxd);
+    bx = new THREE.Box3().setFromObject(room); const c = bx.getCenter(new THREE.Vector3());
+    room.position.x -= c.x; room.position.z -= c.z; room.position.y -= bx.min.y;
+    room.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+    scene.add(room); importedRoom = room; importedBuf = buf;
+    bx = new THREE.Box3().setFromObject(room);
+    bounds = { minX: bx.min.x + 0.2, maxX: bx.max.x - 0.2, minZ: bx.min.z + 0.2, maxZ: bx.max.z - 0.2 };
+    if (bounds.minX > bounds.maxX || bounds.minZ > bounds.maxZ) bounds = { minX: -10, maxX: 10, minZ: -10, maxZ: 10 };
+    demoRoom.visible = false; hearRing.visible = true;
+    if (me.seat && seatById(me.seat)?.demo) stand();
+    me.x = clamp(0, bounds.minX, bounds.maxX); me.z = clamp(0, bounds.minZ, bounds.maxZ);
+    if (broadcast) placeBoardHere(false);
+    $('#roomName').textContent = name.replace(/\.glb$/i, '');
+    $('#roomSub').textContent = `Imported scan · ${(bx.max.x - bx.min.x).toFixed(1)} × ${(bx.max.z - bx.min.z).toFixed(1)} m · add seats from the Scan panel`;
+    $('#scanStatus').textContent = 'Loaded. Walk to a spot and press “Add a seat where I’m standing”. The whiteboard is now in front of you.';
+    startSweep(bx.min.x, bx.max.x);
+    if (broadcast) send({ t: 'room', buf, name, board: boardPosMsg() });
+  }, err => { $('#scanStatus').textContent = 'Couldn’t read that file: ' + (err && err.message || err); });
+}
+function restoreDemo(broadcast) {
+  if (importedRoom) scene.remove(importedRoom);
+  importedRoom = null; importedBuf = null; demoRoom.visible = true; bounds = { ...DEMO_BOUNDS };
+  setBoardPos(DEMO_BOARD.p, DEMO_BOARD.ry);
+  if (blocked(me.x, me.z)) { me.x = 0; me.z = 3.6; }
+  $('#roomName').textContent = 'Pattee Library · Study Room 3'; $('#roomSub').textContent = 'Demo scan · 14 × 10 m · 8 seats · 2 tables';
+  $('#scanStatus').textContent = 'Demo room restored.';
+  startSweep(-7, 7);
+  if (broadcast) send({ t: 'roomReset' });
+}
+const boardPosMsg = () => ({ p: boardGroup.position.toArray(), ry: boardGroup.rotation.y });
+function placeBoardHere(announce = true) {
+  const fx = -Math.sin(me.yaw), fz = -Math.cos(me.yaw);
+  setBoardPos([me.x + fx * 2.4, 1.6, me.z + fz * 2.4], me.yaw);
+  send({ t: 'boardPos', ...boardPosMsg() });
+  if (announce) toast('Moved the whiteboard in front of you.', [], 2000);
+}
+function addCustomSeat(s, broadcast) {
+  if (seatById(s.id)) return;
+  const seat = { id: s.id, x: s.x, z: s.z, yaw: s.yaw, table: null, custom: true };
+  seat.mesh = makeChair(seat, customGroup); seats.push(seat);
+  if (broadcast) send({ t: 'seatAdd', seat: { id: seat.id, x: seat.x, z: seat.z, yaw: seat.yaw } });
+}
+$('#addSeat').onclick = () => {
+  if (me.seat) { toast('Stand up first.'); return; }
+  addCustomSeat({ id: 'c' + rid(), x: me.x, z: me.z, yaw: me.yaw }, true);
+  toast('Seat added. Press <b>E</b> to sit in it.', [], 2500);
+};
+$('#moveBoard').onclick = () => placeBoardHere(true);
+$('#resetRoom').onclick = () => restoreDemo(true);
+
+// ---------- networking (BroadcastChannel between tabs)
+function myState() { return { id: me.id, name: me.name, color: me.color, x: +me.x.toFixed(3), z: +me.z.toFixed(3), yaw: +me.yaw.toFixed(3), seat: me.seat, speaking: me.speaking, sharing: me.sharing, working: me.working }; }
+function onState(s) {
+  if (!s || !s.id) return;
+  let p = peers.get(s.id);
+  if (!p) { p = { state: s, av: makeAvatar(s.name, safeColor(s.color)) }; peers.set(s.id, p); poseAvatar(p.av, s, 0, true); sysChat(`${s.name} joined from another tab.`); }
+  else if (p.state.name !== s.name) retag(p.av, s.name, safeColor(s.color));
+  if (p.state.seat !== s.seat && s.seat && me.seat && tableOf(s.seat) && tableOf(s.seat) === tableOf(me.seat)) sysChat(`${s.name} sat down at your table.`);
+  p.state = s; p.last = performance.now();
+}
+function removePeer(id) {
+  const p = peers.get(id); if (!p) return;
+  scene.remove(p.av.group); peers.delete(id); viewers.delete(id); frameImgs.delete(id);
+  for (const it of items.values()) if (it.type === 'web' && it.streamer === id) { it.mode = 'embed'; it.streamer = null; it.v++; boardDirty = true; }
+  syncItemsDOM();
+  if (viewing === id) closeViewer();
+  sysChat(`${p.state.name} left.`); updateShareChip();
+}
+function mergeItem(it) {
+  const cur = items.get(it.id);
+  if (cur && cur.v > it.v) return;
+  items.set(it.id, it); zTop = Math.max(zTop, it.z || 0); boardDirty = true;
+}
+if (bc) bc.onmessage = ({ data: m }) => {
+  if (!joined || !m || m.from === me.id) return;
+  switch (m.t) {
+    case 'hello':
+      onState(m.s);
+      send({ t: 'snapshot', to: m.from, items: [...items.values()], strokes: [...strokes.values()], seats: seats.filter(s => s.custom).map(s => ({ id: s.id, x: s.x, z: s.z, yaw: s.yaw })), board: boardPosMsg(), room: importedBuf ? { buf: importedBuf, name: $('#roomName').textContent + '.glb' } : null });
+      break;
+    case 'state': onState(m.s); break;
+    case 'bye': removePeer(m.from); break;
+    case 'snapshot':
+      if (m.to !== me.id) break;
+      m.items.forEach(mergeItem); m.strokes.forEach(s => strokes.set(s.id, s)); m.seats.forEach(s => addCustomSeat(s, false));
+      if (m.room && !importedRoom) { loadRoomBuffer(m.room.buf, m.room.name, false); setTimeout(() => setBoardPos(m.board.p, m.board.ry), 300); }
+      else if (importedRoom || m.room) setBoardPos(m.board.p, m.board.ry);
+      boardDirty = true; syncItemsDOM(); redrawInk();
+      break;
+    case 'item': mergeItem(m.item); syncItemsDOM(); break;
+    case 'itemMove': { const it = items.get(m.id); if (it) { Object.assign(it, { x: m.x, y: m.y, w: m.w, h: m.h, z: m.z }); zTop = Math.max(zTop, m.z); boardDirty = true; if (wbOpen) upsertEl(it); } break; }
+    case 'itemDel': items.delete(m.id); boardDirty = true; syncItemsDOM(); break;
+    case 'stroke': strokes.set(m.stroke.id, m.stroke); boardDirty = true; redrawInk(); syncItemsDOM(); break;
+    case 'strokeDel': m.ids.forEach(i => strokes.delete(i)); boardDirty = true; redrawInk(); syncItemsDOM(); break;
+    case 'chat': addChat({ name: m.name, color: m.color, text: m.text, roomWide: m.roomWide, g: prox(me, m).g }); break;
+    case 'frame':
+      if (m.pub || (m.to || []).includes(me.id)) {
+        const im = getImg('frame-' + m.from, m.data); frameImgs.set(m.from, im);
+        if (m.pub) { boardDirty = true; if (wbOpen) wbItems.querySelectorAll(`[data-owner="${m.from}"] img.frame`).forEach(i => { i.src = m.data; }); }
+        if (viewing === m.from) { const vi = $('#viewerImg'); if (vi) vi.src = m.data; }
+      }
+      break;
+    case 'viewReq': if (m.to === me.id) handleViewReq(m.from); break;
+    case 'viewResp':
+      if (m.to !== me.id) break;
+      { const n = peers.get(m.from)?.state.name || 'They'; if (m.ok) openViewer(m.from, n); else toast(`${esc(n)} declined, or isn’t sharing right now.`); }
+      break;
+    case 'viewLeave': if (m.to === me.id) { viewers.delete(m.from); updateShareChip(); } break;
+    case 'tabFrame': {
+      const it = items.get(m.id); if (!it || it.streamer !== m.from) break;
+      tabFrames.set(m.id, getImg('tab-' + m.id, m.data)); boardDirty = true;
+      if (wbOpen) wbItems.querySelectorAll(`[data-id="${CSS.escape(m.id)}"] img.tabframe`).forEach(i => { i.src = m.data; });
+      break;
+    }
+    case 'shareEnd': if (viewing === m.from) { closeViewer(); toast('That screen share ended.'); } frameImgs.delete(m.from); boardDirty = true; break;
+    case 'seatAdd': addCustomSeat(m.seat, false); break;
+    case 'boardPos': setBoardPos(m.p, m.ry); break;
+    case 'room': loadRoomBuffer(m.buf, m.name, false); if (m.board) setTimeout(() => setBoardPos(m.board.p, m.board.ry), 300); break;
+    case 'roomReset': restoreDemo(false); break;
+  }
+};
+addEventListener('beforeunload', () => send({ t: 'bye' }));
+
+// ---------- loop
+const clock = new THREE.Clock();
+let lastUI = 0, lastScreenDraw = 0;
+// timers keep running (throttled) in background tabs, unlike requestAnimationFrame
+setInterval(() => { if (joined) { if (document.hidden) updateMic(); send({ t: 'state', s: myState() }); } }, 100);
+const camTarget = new THREE.Vector3();
+let lastFrameAt = 0;
+function loop() { requestAnimationFrame(loop); frame(); }
+function frame() {
+  const now = performance.now();
+  if (now - lastFrameAt < (WALL ? 1000 / wallCfg.fps - 2 : 8)) return;
+  lastFrameAt = now;
+  const dt = Math.min(clock.getDelta(), 0.05);
+  if (joined) {
+    updateMe(dt); updateMic();
+    for (const b of bots) updateBot(b, dt);
+    poseAvatar(myAv, me, dt);
+    for (const p of peers.values()) poseAvatar(p.av, p.state, dt);
+    for (const b of bots) { b.av.group.visible = botsOn && !importedRoom; if (b.av.group.visible) poseAvatar(b.av, b, dt); }
+    for (const [id, p] of peers) if (now - p.last > 4500) removePeer(id);
+    if (now - lastUI > 250) { lastUI = now; updatePeople(); updatePrompt(); updateDeskPeople(); updateWallStrip(); }
+    updateAudio();
+    if (viewing && viewing.startsWith('bot-')) drawFake(dt);
+    camTarget.set(me.x, me.seat ? 1.12 : 1.6, me.z);
+    camera.position.lerp(camTarget, 1 - Math.exp(-dt * 10));
+    camera.rotation.set(me.pitch, me.yaw, 0);
+    if (WALL) wallCamera(dt, now);
+  } else {
+    const t = now * 0.00012;
+    camera.position.set(Math.sin(t) * 2.5, 2.5, 4.2); camera.lookAt(0, 1.1, -1.5);
+  }
+  if (sweep.visible) {
+    sweepT += dt; const k = sweepT / 2.4;
+    sweep.position.set(sweepFrom + (sweepTo - sweepFrom) * k, RH / 2, 0); sweep.material.opacity = 0.32 * (1 - k);
+    if (k >= 1) sweep.visible = false;
+  }
+  hearRing.position.set(me.x, 0.02, me.z); hearRing.visible = joined;
+  const myTable = tableOf(me.seat);
+  for (const [id, z] of Object.entries(tableZones)) z.material.opacity += ((myTable === id ? 0.14 : 0) - z.material.opacity) * 0.1;
+  if (now - lastScreenDraw > 180 && [...items.values()].some(i => i.type === 'screen' || (i.type === 'web' && i.mode === 'stream'))) { lastScreenDraw = now; boardDirty = true; }
+  if (boardDirty) { boardDirty = false; renderBoard(); }
+  renderer.render(scene, camera);
+  if (deskCtx) drawDesk();
+}
+function resize() { renderer.setSize(innerWidth, innerHeight, false); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); layoutBoard(); }
+addEventListener('resize', resize); resize(); loop();
+
+// ---------- desk view: a small always-on-top window of your table while you work in other apps
+const DESK_CSS = `html,body{margin:0;height:100%;background:#0f1115;color:#e9ebf1;font:13px system-ui,sans-serif;display:flex;flex-direction:column;overflow:hidden}
+#dv{flex:1;min-height:0;background:#000}#dv canvas{width:100%;height:100%;object-fit:cover;display:block}
+.dbar{display:flex;gap:6px;align-items:center;padding:6px 8px;border-top:1px solid rgba(255,255,255,.1)}
+#dpeople{flex:1;display:flex;gap:5px;flex-wrap:wrap;min-width:0}
+.dp{display:flex;align-items:center;gap:4px;padding:2px 8px;border-radius:999px;background:rgba(255,255,255,.07);font-size:12px}
+.dp i{width:8px;height:8px;border-radius:50%}.dp.talk{background:rgba(79,209,139,.25)}
+button{font:inherit;color:inherit;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);border-radius:8px;padding:4px 9px;cursor:pointer}
+button.on{background:rgba(79,209,139,.25);border-color:rgba(79,209,139,.6)}`;
+function closeDesk() {
+  me.working = false; $('#deskBtn .lbl').textContent = 'Open laptop';
+  deskWin = null; deskCtx = null; clearInterval(deskTimer);
+  if (deskVideo && document.pictureInPictureElement === deskVideo) document.exitPictureInPicture().catch(() => {});
+  deskVideo = null; $('#deskBtn').classList.remove('on');
+}
+async function openDeskView() {
+  if (deskWin) { deskWin.close(); closeDesk(); return; }
+  if (!me.seat && deskNeedsSeat) {
+    const s = nearestFreeSeat() || activeSeats().filter(x => !occupant(x.id)).sort((a, b) => Math.hypot(a.x - me.x, a.z - me.z) - Math.hypot(b.x - me.x, b.z - me.z))[0];
+    if (!s) { toast('Every seat is taken, so Desk Mode can’t start.'); return; }
+    sit(s);
+  }
+  deskCanvas = document.createElement('canvas'); deskCanvas.width = 640; deskCanvas.height = 400;
+  if ('documentPictureInPicture' in window) {
+    try {
+      const w = await documentPictureInPicture.requestWindow({ width: 440, height: 320 });
+      w.document.head.innerHTML = `<title>Commons · desk view</title><style>${DESK_CSS}</style>`;
+      w.document.body.innerHTML = '<div id="dv"></div><div class="dbar"><div id="dpeople"></div><button id="dmic" title="Microphone">🎙</button><button id="dback" title="Back to the full room">Room</button></div>';
+      w.document.getElementById('dv').appendChild(deskCanvas);
+      w.document.getElementById('dmic').onclick = () => toggleMic();
+      w.document.getElementById('dback').onclick = () => { window.focus(); w.close(); };
+      w.addEventListener('pagehide', closeDesk);
+      deskWin = w; deskCtx = deskCanvas.getContext('2d');
+      const pipLoop = () => { if (deskWin !== w) return; w.requestAnimationFrame(pipLoop); if (document.hidden) frame(); };
+      w.requestAnimationFrame(pipLoop);   // the room tab's own animation loop pauses when it's hidden; the pop-out keeps it going
+      me.working = true; $('#deskBtn .lbl').textContent = 'Close laptop'; $('#deskBtn').classList.add('on'); updateDeskPeople();
+      return;
+    } catch (e) { console.warn('Document PiP failed', e); }
+  }
+  try {   // fallback: classic video picture-in-picture of the rendered room (Safari, Firefox)
+    deskCtx = deskCanvas.getContext('2d'); drawDesk();
+    deskVideo = document.createElement('video'); deskVideo.muted = true; deskVideo.playsInline = true;
+    deskVideo.srcObject = deskCanvas.captureStream(20); await deskVideo.play();
+    await deskVideo.requestPictureInPicture();
+    deskVideo.addEventListener('leavepictureinpicture', closeDesk);
+    deskTimer = setInterval(() => { if (document.hidden) frame(); }, 100);
+    deskWin = { close: closeDesk };
+    me.working = true; $('#deskBtn .lbl').textContent = 'Close laptop'; $('#deskBtn').classList.add('on');
+  } catch { closeDesk(); toast('This browser can’t pop out a window. Try the desktop wallpaper mode, or open the room on a spare tablet.'); }
+}
+function drawDesk() {
+  const W = deskCanvas.width, H = deskCanvas.height, src = renderer.domElement;
+  const s = Math.max(W / src.width, H / src.height), sw = W / s, sh = H / s;
+  deskCtx.drawImage(src, (src.width - sw) / 2, (src.height - sh) / 2, sw, sh, 0, 0, W, H);
+  if (deskVideo) {   // video PiP has no HTML, so draw the table's people onto the frame
+    const near = nearbyPeople(); let x = 10;
+    deskCtx.font = '600 15px system-ui,sans-serif';
+    for (const p of near) {
+      const w = deskCtx.measureText(p.name).width + 30;
+      deskCtx.fillStyle = p.speaking ? 'rgba(79,209,139,.85)' : 'rgba(15,17,21,.75)'; rr(deskCtx, x, H - 36, w, 26, 13); deskCtx.fill();
+      deskCtx.fillStyle = safeColor(p.color); deskCtx.beginPath(); deskCtx.arc(x + 13, H - 23, 5, 0, 7); deskCtx.fill();
+      deskCtx.fillStyle = '#fff'; deskCtx.fillText(p.name, x + 22, H - 18); x += w + 6;
+    }
+  }
+}
+function nearbyPeople() {
+  const all = [...peers.values()].map(p => p.state).concat(botsOn && !importedRoom ? bots : []);
+  return all.filter(o => prox(me, o).g > 0).sort((a, b) => prox(me, b).g - prox(me, a).g).slice(0, 6);
+}
+function updateDeskPeople() {
+  if (!deskWin || !deskWin.document) return;
+  const box = deskWin.document.getElementById('dpeople'); if (!box) return;
+  const near = nearbyPeople();
+  box.innerHTML = near.length ? near.map(p => `<span class="dp${p.speaking ? ' talk' : ''}"><i style="background:${safeColor(p.color)}"></i>${esc(p.name)}</span>`).join('') : '<span class="dp">Nobody nearby</span>';
+  deskWin.document.getElementById('dmic').classList.toggle('on', !!micStream);
+}
+$('#deskBtn').onclick = openDeskView;
+$('#deskSeated').checked = deskNeedsSeat;
+$('#deskSeated').onchange = e => { deskNeedsSeat = e.target.checked; try { localStorage.setItem('commons-desk-needs-seat', deskNeedsSeat ? '1' : '0'); } catch {} };
+
+// ---------- wallpaper / desk-display mode
+const wallMsgs = [];
+function wallSit() {
+  if (me.seat) stand();
+  const s = seatById(wallCfg.seat) || activeSeats().find(x => !occupant(x.id));
+  if (s && !occupant(s.id)) sit(s);
+}
+const wallPos = new THREE.Vector3(), wallLook = new THREE.Vector3(), wallLookCur = new THREE.Vector3(-1, 0.8, 0);
+function wallCamera(dt, now) {   // a slow over-the-shoulder shot that sits nicely behind your app windows
+  const s = seatById(me.seat), sway = Math.sin(now * 0.00007), zone = s && tableZones[s.table];
+  if (wallCfg.view === 'board') { wallPos.set(sway * 0.5, 2.8, 4.6); wallLook.set(boardGroup.position.x, 1.0, boardGroup.position.z); }
+  else if (wallCfg.view === 'room' || !s) { wallPos.set(5.7 + sway * 0.35, 2.9, 4.2); wallLook.set(-1, 0.8, -0.8); }
+  else {
+    const bx = Math.sin(s.yaw), bz = Math.cos(s.yaw), c = zone ? zone.position : new THREE.Vector3(s.x, 0, s.z);
+    wallPos.set(s.x + bx * 2.5 - bz * 1.3 + sway * 0.3, 2.45, s.z + bz * 2.5 + bx * 1.3);
+    wallLook.set(c.x, 0.8, c.z);
+  }
+  const k = 1 - Math.exp(-dt * 2.5);
+  camera.position.lerp(wallPos, k); wallLookCur.lerp(wallLook, k); camera.lookAt(wallLookCur);
+  myAv.inner.visible = true; myAv.tag.visible = false; hearRing.visible = false;
+}
+function updateWallStrip() {
+  if (!WALL) return;
+  const s = seatById(me.seat);
+  $('#wsRoom').textContent = $('#roomName').textContent;
+  $('#wsSub').textContent = s && s.table && !importedRoom ? `You’re at Table ${s.table} · ${1 + peers.size + (botsOn ? bots.length : 0)} in the room` : 'Desk display';
+  $('#wsPeople').innerHTML = nearbyPeople().map(p => `<span class="ws-p${p.speaking ? ' talk' : ''}"><i style="background:${safeColor(p.color)}"></i>${esc(p.name)}${p.speaking ? ' · talking' : ''}</span>`).join('') || '<span class="ws-p">Nobody nearby</span>';
+  const now = Date.now();
+  $('#wsMsgs').innerHTML = wallMsgs.filter(m => now - m.t < 30000).map(m => `<div style="opacity:${(1 - (now - m.t) / 30000).toFixed(2)}"><b style="color:${safeColor(m.color)}">${esc(m.name)}</b> ${esc(m.text)}</div>`).join('');
+}
+
+// ---------- join
+try { $('#nameIn').value = sessionStorage.getItem('commons-name') || ''; } catch {}
+function join() {
+  const name = $('#nameIn').value.trim() || 'Guest ' + Math.floor(Math.random() * 90 + 10);
+  try { sessionStorage.setItem('commons-name', name); } catch {}
+  me.name = name; retag(myAv, name, me.color);
+  joined = true; $('#join').classList.add('hidden');
+  ensureAudio();
+  send({ t: 'hello', s: myState() });
+  startSweep(-7, 7);
+  sysChat(`You joined ${$('#roomName').textContent}. Maya, Jordan and Priya are simulated classmates.`);
+  if (!bc) sysChat('This browser doesn’t support BroadcastChannel, so tabs won’t sync.');
+  toast('Drag to look around and use <b>WASD</b> to walk. Click a chair or press <b>E</b> to sit, and press <b>B</b> for the whiteboard. Press <b>?</b> in the toolbar for all controls.', [], 7000);
+}
+$('#joinBtn').onclick = join;
+$('#nameIn').addEventListener('keydown', e => { if (e.key === 'Enter') join(); });
+if (WALL) {
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 1.25)); resize();
+  $('#nameIn').value = wallCfg.name; join(); wallSit();
+  $('#wallStrip').classList.remove('hidden');
+} else setTimeout(() => $('#nameIn').focus(), 50);
+</script>
+</body>
+</html>

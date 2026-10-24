@@ -1,0 +1,26 @@
+{
+  "title": "Commons Desk View",
+  "description": "Your seat at a Commons study table, live on your desktop. See who's at your table, who's talking and what's on the whiteboard while you work in your own apps.",
+  "type": "web",
+  "file": "index.html",
+  "preview": "preview.jpg",
+  "tags": ["Relaxing"],
+  "contentrating": "Everyone",
+  "visibility": "private",
+  "general": {
+    "properties": {
+      "displayname": { "order": 1, "text": "Your name", "type": "textinput", "value": "You" },
+      "seat": { "order": 2, "text": "Seat", "type": "combo", "value": "A3", "options": [
+        { "label": "Table A · seat 1", "value": "A0" }, { "label": "Table A · seat 2", "value": "A1" },
+        { "label": "Table A · seat 3", "value": "A2" }, { "label": "Table A · seat 4", "value": "A3" },
+        { "label": "Table B · seat 1", "value": "B0" }, { "label": "Table B · seat 2", "value": "B1" },
+        { "label": "Table B · seat 3", "value": "B2" }, { "label": "Table B · seat 4", "value": "B3" } ] },
+      "view": { "order": 3, "text": "Camera", "type": "combo", "value": "seat", "options": [
+        { "label": "Over my shoulder (my table)", "value": "seat" },
+        { "label": "Whiteboard", "value": "board" },
+        { "label": "Whole room", "value": "room" } ] },
+      "showpanel": { "order": 4, "text": "Show table panel", "type": "bool", "value": true },
+      "simulated": { "order": 5, "text": "Show demo classmates", "type": "bool", "value": true }
+    }
+  }
+}

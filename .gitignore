@@ -1,0 +1,14 @@
+node_modules/
+dist/
+.venv/
+__pycache__/
+.DS_Store
+.env
+.env.local
+
+# large or regenerable files
+*.wav
+*.zip
+video/frames/
+*.clean.ply
+scans/
