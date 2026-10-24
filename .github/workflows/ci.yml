@@ -6,11 +6,12 @@ on:
 
 jobs:
   app:
-    runs-on: ubuntu-latest
+    # Pinned rather than ubuntu-latest, which is mid-migration to a new Ubuntu release.
+    runs-on: ubuntu-24.04
     defaults: { run: { working-directory: app } }
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with: { node-version: 22, cache: npm, cache-dependency-path: app/package-lock.json }
       - run: npm ci
       - run: npx tsc -b
@@ -20,10 +21,18 @@ jobs:
       - run: npm run smoke
 
   scan-pipeline:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with: { python-version: '3.12' }
-      - run: pip install numpy pillow git+https://github.com/nianticlabs/spz
+      - name: Install numpy, pillow and Niantic's spz library
+        run: |
+          python -m pip install --upgrade pip
+          # Builds spz from source. On failure, surface the tail of the log as an annotation.
+          if ! pip install numpy pillow git+https://github.com/nianticlabs/spz > pip.log 2>&1; then
+            msg=$(tail -40 pip.log | sed -e ':a;N;$!ba;s/%/%25/g;s/\r//g;s/\n/%0A/g')
+            echo "::error title=pip install failed::$msg"
+            exit 1
+          fi
       - run: python tools/test_clean_scan.py
