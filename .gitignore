@@ -12,3 +12,5 @@ __pycache__/
 video/frames/
 *.clean.ply
 scans/
+app/tests/out/
+*.tsbuildinfo

@@ -8,6 +8,8 @@ pip install numpy pillow git+https://github.com/nianticlabs/spz     # builds Nia
 python clean_scan.py my_scan.ply                                    # or my_scan.spz
 ```
 
+**Floor filling:** every phone scan misses patches of floor, such as under tables, behind chairs and in corners. The tool works out where the floor should be and fills each hole with flat floor splats, colored by blending in the surrounding floor. Turn this off with `--no-fill-floor`, and widen the gaps it seals at the room's edges with `--fill-close 0.5`.
+
 **What it removes:** nearly invisible splats, giant blobs, floating fuzz (both detached clumps and lonely splats near walls), the mirror-image "ghost room" that shiny floors create underneath, and strays outside the room. It also levels the floor to `y = 0`, centers the room, and caps the splat count (default 1.5 M).
 
 **What it writes, next to the input:**
@@ -37,4 +39,4 @@ const room = new SplatMesh({ url: '/rooms/pattee-3/pattee-3.spz' });
 scene.add(room); await room.initialized;
 ```
 
-`make_test_scan.py` generates a fake messy room for testing. With `--clean`, it makes one with no defects; the tool should keep 100% of that one.
+`make_test_scan.py` generates a fake messy room for testing. `--clean` makes one with no defects, and `--holes` punches holes in the floor. `python test_clean_scan.py` runs the whole pipeline on all three and checks the results. CI runs it on every PR.

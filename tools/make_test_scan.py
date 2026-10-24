@@ -17,7 +17,7 @@ surf(20000, lambda n: np.c_[u(n) * 2.4 - 1.2, np.full(n, 0.75), u(n) * 1.0 - 0.5
 surf(15000, lambda n: np.c_[u(n) * 2.4 - 1.2, 0.9 + u(n) * 1.2, np.full(n, -D/2 + 0.02)], [0.97, 0.97, 0.97])  # whiteboard
 pos = np.concatenate([p for p, _ in parts]); col = np.concatenate([c for _, c in parts])
 if '--holes' in sys.argv:   # punch the kind of holes a phone scan leaves: under the table, a missed corner, a blob
-    x, y, z = pos[:, 0], pos[:, 1], pos[:, 2]; fl = np.abs(y) < 0.02
+    x, y, z = pos[:, 0], pos[:, 1], pos[:, 2]; fl = np.abs(y) < 0.06   # all floor splats, jitter included
     hole = fl & (((np.abs(x) < 1.1) & (np.abs(z) < 0.45)) | ((x > 2.3) & (z > 1.6)) | (np.hypot(x + 1.8, z - 1.2) < 0.5))
     pos, col = pos[~hole], col[~hole]
 n_room = len(pos)

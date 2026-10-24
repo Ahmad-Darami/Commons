@@ -193,7 +193,14 @@ def fill_floor(g, cell, close_m, tol, rng):
         if (grown == outside).all(): break
         outside = grown
     footprint = (~outside)[pad:-pad, pad:-pad]
+    # Most rooms are rectangles: if the scanned floor fills most of its bounding rectangle, the whole rectangle is floor.
+    # That also catches corners the phone never reached, which touch the edge and so can't be told apart from outside.
+    iz, ix = np.nonzero(covered)
+    rz0, rz1 = np.percentile(iz, [0.5, 99.5]).astype(int); rx0, rx1 = np.percentile(ix, [0.5, 99.5]).astype(int)
+    rect = np.zeros_like(covered); rect[rz0:rz1 + 1, rx0:rx1 + 1] = True
+    if (covered & rect).sum() >= 0.8 * rect.sum(): footprint |= rect
     holes = footprint & ~covered
+    holes &= _shift_or(_shift_and(holes, 1), 1)            # ignore specks narrower than ~3 cells: that's sampling noise, not a hole
     if not holes.any(): return 0, footprint, lo
     # colour each hole by harmonic interpolation from the surrounding real floor
     c = col.copy(); c[~covered] = col[covered].mean(0)
