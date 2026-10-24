@@ -4,11 +4,14 @@
 
 ```bash
 python3 -m venv .venv && . .venv/bin/activate
-pip install numpy pillow git+https://github.com/nianticlabs/spz     # builds Niantic's official SPZ library
+CMAKE_ARGS="-DCMAKE_DISABLE_FIND_PACKAGE_zstd=ON" \
+  pip install numpy pillow git+https://github.com/nianticlabs/spz   # builds Niantic's official SPZ library
 python clean_scan.py my_scan.ply                                    # or my_scan.spz
 ```
 
 **Floor filling:** every phone scan misses patches of floor, such as under tables, behind chairs and in corners. The tool works out where the floor should be and fills each hole with flat floor splats, colored by blending in the surrounding floor. Turn this off with `--no-fill-floor`, and widen the gaps it seals at the room's edges with `--fill-close 0.5`.
+
+**If the spz install fails on Linux** with `relocation ... libzstd.a`: that's Ubuntu's static zstd library. The `CMAKE_ARGS` line above makes the build use its own copy.
 
 **What it removes:** nearly invisible splats, giant blobs, floating fuzz (both detached clumps and lonely splats near walls), the mirror-image "ghost room" that shiny floors create underneath, and strays outside the room. It also levels the floor to `y = 0`, centers the room, and caps the splat count (default 1.5 M).
 
