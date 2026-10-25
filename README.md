@@ -6,6 +6,7 @@ Faithful, scanned replicas of real Penn State rooms where World Campus students 
 
 | Path | What it is |
 |---|---|
+| [`HANDOFF.md`](HANDOFF.md) | Where things stand right now, and how to continue locally |
 | [`CONTEXT.md`](CONTEXT.md) | The glossary: Room, Scan, Layout, Appearance, Board, Page, Study Group, Desk Mode and the rest. **Read this first.** |
 | [`docs/adr/`](docs/adr) | Architecture decisions and why they were made |
 | [`app/`](app) | The real app: React, Vite, TypeScript, three.js and Spark (work in progress) |
