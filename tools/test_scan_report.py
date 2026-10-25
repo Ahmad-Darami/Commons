@@ -57,7 +57,12 @@ with tempfile.TemporaryDirectory() as tmp:
     check(abs(sc['width'] - 6) < 0.2 and abs(sc['depth'] - 4.5) < 0.2 and abs(sc['height'] - 2.8) < 0.15 and sc['ceiling_measured'],
           f"complete room: measures about 6 × 4.5 × 2.8 m with a measured ceiling (got {sc['width']:.2f} × {sc['depth']:.2f} × {sc['height']:.2f})")
     check('Original Scan' in out and numbers['raw']['kept_share'] > 0.99, 'complete room: --raw reports what the cleanup kept')
-    check('Synthesized: layout.json records none' in out, 'complete room: handles a layout.json without "synthesized"')
+    # clean_scan.py always records what it synthesized; for a complete room that's zero everywhere
+    check('Synthesized (layout.json): floor 0.0 m²' in out and 'ceiling 0.0 m²' in out, 'complete room: reads an all-zero "synthesized" record as nothing filled in')
+    bare_layout = os.path.join(d, 'no-synthesized.layout.json')
+    json.dump({k: v for k, v in layout.items() if k != 'synthesized'}, open(bare_layout, 'w'))
+    out_none = run(os.path.join(HERE, 'scan_report.py'), os.path.join(d, 'complete.spz'), bare_layout)
+    check('Synthesized: layout.json records none' in out_none, 'complete room: handles a layout.json without "synthesized"')
     html = open(page, encoding='utf-8').read()
     check(html.count('data:image/png;base64,') == 2 and 'good' in html and '<script' not in html,
           'HTML page is self-contained, with the coverage map and the renders embedded')

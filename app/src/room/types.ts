@@ -36,6 +36,10 @@ export interface Layout {
   seats: Seat[];
   boards: BoardSpot[];
   note?: string;
+  /** Square metres the cleanup filled in because the Scan missed them (ADR-0003). Walls are keyed by side. */
+  synthesized?: { floor_m2: number; walls_m2: Record<'-z' | '+x' | '+z' | '-x', number>; ceiling_m2: number };
+  /** The planes the synthesized walls and ceiling lie on. */
+  room_box?: { min_x: number; max_x: number; min_z: number; max_z: number; ceiling_y: number };
 }
 
 export interface RoomEntry { id: string; name: string }
