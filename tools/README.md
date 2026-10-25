@@ -45,3 +45,17 @@ scene.add(room); await room.initialized;
 ```
 
 `make_test_scan.py` generates a fake messy room for testing. `--clean` makes one with no defects, and `--holes` punches holes in the floor. `python test_clean_scan.py` runs the whole pipeline on all three and checks the results. CI runs it on every PR.
+
+## Publishing a Scan as a Room
+
+`publish_room.py` does the whole job in one command: cleanup, suggested furniture, the Room folder and `index.json`.
+
+    python tools/publish_room.py my_scan.spz pattee-3 "Pattee Library · Room 3" --default
+
+- Runs `clean_scan.py`; pass its flags with `--clean-args "--no-sh --max-splats 800000"`.
+- Suggests **Tables** (flat surfaces 0.65–0.80 m up, at least 0.4 × 0.4 m) and **seats** (chair seats 0.40–0.55 m up). A seat joins a Table within 1.2 m and faces it; otherwise it faces the room's center. Both are marked `"suggested": true` until a Room Curator confirms them.
+- Writes `app/public/rooms/<room-id>/{appearance.spz, layout.json}` and adds or renames the Room in `index.json` (`--default` lists it first). It never touches other Rooms.
+- Re-publishing keeps what a Curator already placed (Boards, and confirmed Tables and seats) and replaces only old suggestions. `--fresh` starts over.
+- Runs `render_views.mjs` and `scan_report.py` when they're installed, into `--qa-dir`. `--no-qa` skips them, and `--work-dir` keeps the `*.clean.ply` master copy and the preview.
+
+Then open `http://localhost:5173/?curate&room=<room-id>` to confirm the suggestions and place the Boards. `python tools/test_publish_room.py` checks it on a synthetic Scan.

@@ -7,10 +7,18 @@ export interface Bounds { min_x: number; max_x: number; min_z: number; max_z: nu
 export interface Walkable { cell: number; origin: [number, number]; rows: string[] }
 
 /** A Table, as an axis box on the floor, rotated by `rotation` radians about +y. */
-export interface Table { id: string; x: number; z: number; width: number; depth: number; height: number; rotation: number }
+export interface Table {
+  id: string; x: number; z: number; width: number; depth: number; height: number; rotation: number;
+  /** Detected by tools/publish_room.py and not yet confirmed by a Room Curator. */
+  suggested?: boolean;
+}
 
 /** A seat. `facing` is the yaw a seated Student looks along (forward = (-sin, -cos)). */
-export interface Seat { id: string; x: number; z: number; facing: number; tableId: string | null }
+export interface Seat {
+  id: string; x: number; z: number; facing: number; tableId: string | null;
+  /** Detected by tools/publish_room.py and not yet confirmed by a Room Curator. */
+  suggested?: boolean;
+}
 
 /** Where a Board sits: centre, size, and the yaw its writing surface faces. */
 export interface BoardSpot { id: string; x: number; y: number; z: number; width: number; height: number; rotation: number }
