@@ -21,7 +21,7 @@ try {
   const page = await browser.newPage({ viewport: { width: 1280, height: 760 } });
   page.on('pageerror', e => errors.push(e.message));
   page.on('console', m => { consoleTail.push(`${m.type()}: ${m.text()}`); if (consoleTail.length > 30) consoleTail.shift(); });
-  await page.goto('http://localhost:4319/?debug');
+  await page.goto('http://localhost:4319/?debug&room=demo-study-room');   // the demo Room has known seats
   await page.waitForFunction(() => document.body.innerText.includes('M splats'), null, { timeout: 90000 });
   const st = () => page.evaluate(() => { const s = window.__commons.getState(); return { me: s.me, seats: s.layout.seats.length }; });
   check((await st()).me.seatId === null, 'Room loads with the scan, standing');
@@ -42,6 +42,15 @@ try {
   await page.mouse.click(640, 700); await page.waitForTimeout(300);
   check((await st()).seats === 5, 'Curator places a new seat by clicking the floor');
   await shot(page, '3-curating.png');
+  // The real scanned Room opens by default: it loads, you start on its floor, and you can take its seat.
+  await page.goto('http://localhost:4319/?debug');
+  await page.waitForFunction(() => document.body.innerText.includes('M splats'), null, { timeout: 120000 });
+  const real = await page.evaluate(() => { const s = window.__commons.getState(); return { room: s.room.id, seats: s.layout.seats.map(x => x.id), me: s.me }; });
+  check(real.room === 'psu-first-scan', 'the real scanned Room opens by default');
+  await page.evaluate(() => { const st = window.__commons.getState(), seat = st.layout.seats[0]; st.setMe({ x: seat.x + 0.5, z: seat.z }); });
+  await page.keyboard.press('e'); await page.waitForTimeout(300);
+  check((await st()).me.seatId === real.seats[0], 'you can sit in the real Room\'s chair');
+  await shot(page, '4-real-room.png');
   check(errors.length === 0, `no page errors${errors.length ? ': ' + errors.join(' | ') : ''}`);
 } catch (e) {
   fails.push(e.message.split('\n')[0]);

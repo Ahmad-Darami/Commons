@@ -9,7 +9,9 @@ CMAKE_ARGS="-DCMAKE_DISABLE_FIND_PACKAGE_zstd=ON" \
 python clean_scan.py my_scan.ply                                    # or my_scan.spz
 ```
 
-**Floor filling:** every phone scan misses patches of floor, such as under tables, behind chairs and in corners. The tool works out where the floor should be and fills each hole with flat floor splats, colored by blending in the surrounding floor. Turn this off with `--no-fill-floor`, and widen the gaps it seals at the room's edges with `--fill-close 0.5`.
+**Squaring up:** phone scans start wherever you happened to point the phone, so the room is usually turned at some angle. The tool turns it about the vertical so its walls run along x and z, which the app relies on (for example to place a Board on a wall). It finds the angle where walls and furniture edges, seen from above, line up most sharply. Turn this off with `--no-square`.
+
+**Floor filling:** every phone scan misses patches of floor, such as under tables, behind chairs and in corners. The tool works out where the floor should be and fills each hole with small floor splats that copy the colors of real floor splats nearby, so a speckled carpet stays speckled. That includes the spot where you stood while scanning, which a phone never captures. Turn this off with `--no-fill-floor`, and widen the gaps it seals at the room's edges with `--fill-close 0.5`.
 
 **If the spz install fails on Linux** with `relocation ... libzstd.a`: that's Ubuntu's static zstd library. The `CMAKE_ARGS` line above makes the build use its own copy.
 

@@ -39,6 +39,11 @@ rot = np.tile([0, 0, 0, 1.0], (n, 1))
 th = math.radians(6); R = np.array([[1, 0, 0], [0, math.cos(th), -math.sin(th)], [0, math.sin(th), math.cos(th)]])
 pos = pos @ R.T + [1.3, 0.9, -2.0]
 rot = np.tile([math.sin(th / 2), 0, 0, math.cos(th / 2)], (n, 1))
+if '--yaw' in sys.argv:   # turn the whole room 30 degrees about the vertical, like a scan that started at an angle
+    ya = math.radians(30); Ry = np.array([[math.cos(ya), 0, math.sin(ya)], [0, 1, 0], [-math.sin(ya), 0, math.cos(ya)]])
+    pos = pos @ Ry.T
+    qy = np.array([0, math.sin(ya / 2), 0, math.cos(ya / 2)]); qt = rot[0]
+    rot = np.tile([qy[3] * qt[0] + qy[1] * qt[2], qy[1] * qt[3] + qy[3] * qt[1], -qy[1] * qt[0] + qy[3] * qt[2], qy[3] * qt[3] - qy[1] * qt[1]], (n, 1))
 c = spz.GaussianCloud(); c.sh_degree = 1
 c.positions = pos.astype(np.float32).ravel(); c.scales = scale.astype(np.float32).ravel(); c.rotations = rot.astype(np.float32).ravel()
 c.alphas = alpha.astype(np.float32).ravel(); c.colors = ((col - 0.5) / 0.282095).astype(np.float32).ravel()

@@ -132,22 +132,57 @@ def quat_mul(q, r):   # Hamilton product, xyzw, q applied after r
                      w1 * w2 - x1 * x2 - y1 * y2 - z1 * z2], 1)
 
 
+def rotate(g, axis, th, keep_sh, why):
+    """Rotate every splat by th radians about a unit axis through the origin."""
+    K = np.array([[0, -axis[2], axis[1]], [axis[2], 0, -axis[0]], [-axis[1], axis[0], 0]])
+    R = np.eye(3) + math.sin(th) * K + (1 - math.cos(th)) * K @ K
+    q = np.array([*(np.asarray(axis) * math.sin(th / 2)), math.cos(th / 2)])
+    g['pos'] = (g['pos'] @ R.T).astype(np.float32)
+    g['rot'] = quat_mul(q, g['rot'].astype(np.float64)).astype(np.float32)
+    if abs(math.degrees(th)) > 2 and g['sh_degree'] > 0 and not keep_sh:
+        # higher-order SH would need rotating too; dropping them keeps colours right (and tames glare)
+        g['sh_degree'] = 0; g['sh'] = g['sh'][:, :0]
+        log(f'  {why}, so view-dependent shine (SH) was dropped')
+
+
 def level(g, n, keep_sh):
     """Rotate so the floor normal n becomes +y. Returns the rotation angle in degrees."""
     up = np.array([0, 1, 0.]); axis = np.cross(n, up); s = np.linalg.norm(axis); c = n @ up
-    ang = math.degrees(math.atan2(s, c))
     if s < 1e-9: return 0.0
-    axis /= s; th = math.atan2(s, c)
-    K = np.array([[0, -axis[2], axis[1]], [axis[2], 0, -axis[0]], [-axis[1], axis[0], 0]])
-    R = np.eye(3) + math.sin(th) * K + (1 - math.cos(th)) * K @ K
-    q = np.array([*(axis * math.sin(th / 2)), math.cos(th / 2)])
-    g['pos'] = (g['pos'] @ R.T).astype(np.float32)
-    g['rot'] = quat_mul(q, g['rot'].astype(np.float64)).astype(np.float32)
-    if ang > 2 and g['sh_degree'] > 0 and not keep_sh:
-        # higher-order SH would need rotating too; dropping them keeps colours right (and tames glare)
-        g['sh_degree'] = 0; g['sh'] = g['sh'][:, :0]
-        log(f'  levelled by {ang:.1f}°, so view-dependent shine (SH) was dropped')
-    return ang
+    th = math.atan2(s, c)
+    rotate(g, axis / s, th, keep_sh, f'levelled by {math.degrees(th):.1f}°')
+    return math.degrees(th)
+
+
+def square_up(g, tol, keep_sh):
+    """Turn the room about +y so its walls run along x and z.
+
+    Walls and furniture edges seen from above are straight lines. At the right angle, projecting the splats
+    between knee and head height onto the x and z axes piles them into sharp peaks, so pick the angle that
+    maximises how peaked those projections are (sum of squared histogram counts).
+    """
+    p = g['pos']; band = (p[:, 1] > 0.3) & (p[:, 1] < 2.2)
+    pts = (p[band] if band.sum() > 5000 else p[np.abs(p[:, 1]) < tol])[:, [0, 2]].astype(np.float64)
+    if len(pts) > 300_000: pts = pts[np.random.default_rng(2).choice(len(pts), 300_000, replace=False)]
+    lo, hi = np.percentile(pts, 0.5, 0), np.percentile(pts, 99.5, 0)
+    pts = pts[((pts >= lo) & (pts <= hi)).all(1)]
+    r = np.hypot(*(hi - lo)) / 2 + 0.1; bins = np.linspace(-r, r, int(2 * r / 0.04))
+    c0 = pts.mean(0); pts = pts - c0
+
+    def peakedness(deg):
+        t = math.radians(deg); c, s = math.cos(t), math.sin(t)
+        hu, _ = np.histogram(pts[:, 0] * c - pts[:, 1] * s, bins); hv, _ = np.histogram(pts[:, 0] * s + pts[:, 1] * c, bins)
+        return float((hu.astype(np.float64) ** 2).sum() + (hv.astype(np.float64) ** 2).sum())
+
+    coarse = np.arange(-45, 45, 1.0)
+    best = coarse[int(np.argmax([peakedness(d) for d in coarse]))]
+    fine = np.arange(best - 1.5, best + 1.5, 0.05)
+    best = float(fine[int(np.argmax([peakedness(d) for d in fine]))])
+    best = (best + 45) % 90 - 45                       # a room is the same turned by 90°
+    if abs(best) < 0.5: return 0.0
+    # a positive turn about +y maps (x, z) to (x cos + z sin, -x sin + z cos); the search used the opposite sense
+    rotate(g, np.array([0, 1, 0.]), -math.radians(best), keep_sh, f'turned {abs(best):.1f}° to square the room up')
+    return best
 
 
 def _shift_or(m, r):   # binary dilation by a (2r+1) square, without scipy
@@ -166,23 +201,31 @@ def _shift_and(m, r):  # binary erosion by a (2r+1) square
     return out
 
 
+FILL_PER = 6   # small overlapping discs per filled cell, like the fine splats of a real floor
+
+
 def floor_grid(g, cell, tol):
     """Which cells of the floor did the Scan actually cover, and with what colour?"""
     p = g['pos']; on = np.abs(p[:, 1]) < tol
     fl, rgb = p[on], np.clip(0.5 + 0.282095 * g['color'][on], 0, 1)
+    w = sigmoid(g['alpha'][on])                            # weight by opacity: faint fuzz barely shows, so it shouldn't set the colour
     lo = np.percentile(fl[:, [0, 2]], 0.5, axis=0) - 2 * cell; hi = np.percentile(fl[:, [0, 2]], 99.5, axis=0) + 2 * cell
     shape = (int(np.ceil((hi[1] - lo[1]) / cell)) + 1, int(np.ceil((hi[0] - lo[0]) / cell)) + 1)
     ix = ((fl[:, 0] - lo[0]) / cell).astype(int).clip(0, shape[1] - 1); iz = ((fl[:, 2] - lo[1]) / cell).astype(int).clip(0, shape[0] - 1)
-    count = np.zeros(shape); col = np.zeros(shape + (3,))
-    np.add.at(count, (iz, ix), 1); np.add.at(col, (iz, ix), rgb)
+    count = np.zeros(shape); wsum = np.zeros(shape); col = np.zeros(shape + (3,))
+    np.add.at(count, (iz, ix), 1); np.add.at(wsum, (iz, ix), w); np.add.at(col, (iz, ix), rgb * w[:, None])
     covered = count >= max(1, 0.15 * np.median(count[count > 0]))
-    col[covered] /= count[covered][:, None]
-    return lo, covered, col
+    col[covered] /= np.maximum(wsum[covered], 1e-6)[:, None]
+    # Per-cell lists of the real, clearly visible floor splats, so filling can copy individual splat colours.
+    vis = w >= 0.3; cid = (iz * shape[1] + ix)[vis]; order = np.argsort(cid, kind='stable')
+    starts = np.searchsorted(cid[order], np.arange(shape[0] * shape[1])); counts = np.bincount(cid, minlength=shape[0] * shape[1])
+    sampler = (rgb[vis][order], starts, counts)
+    return lo, covered, col, sampler
 
 
 def fill_floor(g, cell, close_m, tol, rng):
     """Synthesise flat floor splats wherever the floor should be but the Scan has a hole."""
-    lo, covered, col = floor_grid(g, cell, tol)
+    lo, covered, col, (srgb, sstart, scount) = floor_grid(g, cell, tol)
     r = max(1, int(round(close_m / cell)))
     pad = r + 2; cov = np.pad(covered, pad)
     closed = _shift_and(_shift_or(cov, r), r)              # seals gaps up to ~close_m wide, e.g. under a table
@@ -198,7 +241,7 @@ def fill_floor(g, cell, close_m, tol, rng):
     iz, ix = np.nonzero(covered)
     rz0, rz1 = np.percentile(iz, [0.5, 99.5]).astype(int); rx0, rx1 = np.percentile(ix, [0.5, 99.5]).astype(int)
     rect = np.zeros_like(covered); rect[rz0:rz1 + 1, rx0:rx1 + 1] = True
-    if (covered & rect).sum() >= 0.8 * rect.sum(): footprint |= rect
+    if (covered & rect).sum() >= 0.7 * rect.sum(): footprint |= rect
     holes = footprint & ~covered
     holes &= _shift_or(_shift_and(holes, 1), 1)            # ignore specks narrower than ~3 cells: that's sampling noise, not a hole
     if not holes.any(): return 0, footprint, lo
@@ -208,15 +251,30 @@ def fill_floor(g, cell, close_m, tol, rng):
         avg = (np.roll(c, 1, 0) + np.roll(c, -1, 0) + np.roll(c, 1, 1) + np.roll(c, -1, 1)) / 4
         c = np.where(holes[..., None], avg, c)
     iz, ix = np.nonzero(holes)
-    per = 3                                                # a few overlapping discs per cell, so the patch isn't gridded
+    per = FILL_PER
     n = len(iz) * per
     x = lo[0] + (np.repeat(ix, per) + rng.random(n)) * cell; z = lo[1] + (np.repeat(iz, per) + rng.random(n)) * cell
-    rgb = np.clip(np.repeat(c[iz, ix], per, 0) + rng.normal(0, 0.012, (n, 3)), 0, 1)
+    # Borrow texture: give each new splat the colour of a real floor cell nearby, so a speckled carpet stays speckled.
+    # The smooth interpolated colour is only the fallback where no real floor is within reach.
+    rgb = np.repeat(c[iz, ix], per, 0)
+    cz, cx = np.repeat(iz, per), np.repeat(ix, per); todo = np.ones(n, bool)
+    for radius in (8, 16, 32):                             # in cells: ~0.3, 0.6, 1.3 m with the default 4 cm cell
+        for _ in range(6):
+            if not todo.any(): break
+            k = np.nonzero(todo)[0]
+            sz = np.clip(cz[k] + rng.integers(-radius, radius + 1, len(k)), 0, covered.shape[0] - 1)
+            sx = np.clip(cx[k] + rng.integers(-radius, radius + 1, len(k)), 0, covered.shape[1] - 1)
+            ok = covered[sz, sx]
+            cells = sz * covered.shape[1] + sx
+            ok &= scount[cells] > 0
+            pick = sstart[cells[ok]] + (rng.random(ok.sum()) * scount[cells[ok]]).astype(int)
+            rgb[k[ok]] = srgb[pick]; todo[k[ok]] = False
+    rgb = np.clip(rgb + rng.normal(0, 0.01, (n, 3)), 0, 1)
     new = {
         'pos': np.c_[x, np.zeros(n), z].astype(np.float32),
-        'scale': np.log(np.c_[np.full(n, cell * 0.55), np.full(n, 0.002), np.full(n, cell * 0.55)]).astype(np.float32),
+        'scale': np.log(np.c_[np.full(n, cell * 0.35), np.full(n, 0.002), np.full(n, cell * 0.35)]).astype(np.float32),
         'rot': np.tile(np.array([0, 0, 0, 1], np.float32), (n, 1)),
-        'alpha': np.full(n, 3.0, np.float32),                  # sigmoid(3) ≈ 0.95
+        'alpha': np.full(n, 1.5, np.float32),                  # sigmoid(1.5) ≈ 0.82: slightly see-through, like real scanned floor
         'color': ((rgb - 0.5) / 0.282095).astype(np.float32),
         'sh': np.zeros((n, g['sh'].shape[1]), np.float32),
     }
@@ -268,6 +326,7 @@ def main():
     ap.add_argument('--floor-tol', type=float, default=0.03, help='floor plane thickness (metres)')
     ap.add_argument('--no-sh', action='store_true', help='drop view-dependent shine: ~4x smaller and less whiteboard glare')
     ap.add_argument('--keep-sh', action='store_true', help='keep SH even if levelling rotated the scan')
+    ap.add_argument('--no-square', action='store_true', help="don't turn the room so its walls run along x and z")
     ap.add_argument('--no-fill-floor', action='store_true', help="don't synthesise floor where the Scan has holes")
     ap.add_argument('--fill-cell', type=float, default=0.04, help='floor-filling grid size (metres)')
     ap.add_argument('--fill-close', type=float, default=0.3, help='seal floor gaps up to this wide at the room edges (metres)')
@@ -297,6 +356,9 @@ def main():
     floor_y = float(np.median(inl[:, 1])); g['pos'][:, 1] -= floor_y
     log(f'  floor found; scan was tilted {tilt:.1f}°, now level at y = 0')
     keep(g, g['pos'][:, 1] >= -0.08, 'below the floor (shiny-floor reflections)', stats)
+    if not a.no_square:
+        turn = square_up(g, a.floor_tol, a.keep_sh)
+        if turn: log(f'  room squared up: turned {abs(turn):.1f}° so its walls run along x and z')
 
     p = g['pos']; lo = np.percentile(p, 0.3, axis=0) - 0.25; hi = np.percentile(p, 99.7, axis=0) + 0.25
     keep(g, (p[:, 0] >= lo[0]) & (p[:, 0] <= hi[0]) & (p[:, 2] >= lo[2]) & (p[:, 2] <= hi[2]) & (p[:, 1] <= hi[1]), 'outside the room', stats)
@@ -317,7 +379,7 @@ def main():
         filled, footprint, flo = fill_floor(g, a.fill_cell, a.fill_close, a.floor_tol, rng)
         log(f'  filled {filled * a.fill_cell ** 2:.2f} m² of missing floor' if filled else '  no holes found')
     else:
-        flo, footprint, _ = floor_grid(g, a.fill_cell, a.floor_tol)
+        flo, footprint = floor_grid(g, a.fill_cell, a.floor_tol)[:2]
 
     cloud = to_cloud(g)
     ply = os.path.join(out, base + '.clean.ply'); spzf = os.path.join(out, base + '.spz')
@@ -337,7 +399,7 @@ def main():
     log('\nRemoved:')
     for why, k in stats:
         if k: log(f'  {k:>10,}  {why}')
-    if filled: log(f'Added {filled * 3:,} floor splats to fill {filled * a.fill_cell ** 2:.2f} m² of holes')
+    if filled: log(f'Added {filled * FILL_PER:,} floor splats to fill {filled * a.fill_cell ** 2:.2f} m² of holes')
     log(f'\nKept {len(g["pos"]):,} of {n0:,} splats ({100 * len(g["pos"]) / n0:.0f}%), SH degree {g["sh_degree"]}')
     log(f'Room footprint {bounds[1]-bounds[0]:.2f} × {bounds[3]-bounds[2]:.2f} m, {height:.2f} m tall  ← sanity-check against the real room')
     src_mb = os.path.getsize(a.scan) / 1e6
