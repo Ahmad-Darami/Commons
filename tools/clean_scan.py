@@ -132,6 +132,37 @@ def quat_mul(q, r):   # Hamilton product, xyzw, q applied after r
                      w1 * w2 - x1 * x2 - y1 * y2 - z1 * z2], 1)
 
 
+# The standard 3D Gaussian Splatting real spherical-harmonic basis (degrees 1 to 3), as renderers evaluate it.
+_C1 = 0.4886025119029199
+_C2 = [1.0925484305920792, -1.0925484305920792, 0.31539156525252005, -1.0925484305920792, 0.5462742152960396]
+_C3 = [-0.5900435899266435, 2.890611442640554, -0.4570457994644658, 0.3731763325901154, -0.4570457994644658, 1.445305721320277, -0.5900435899266435]
+
+
+def sh_basis(d, degree):
+    """SH basis functions (excluding the constant term) at unit directions d (N x 3), in coefficient order."""
+    x, y, z = d[:, 0], d[:, 1], d[:, 2]; xx, yy, zz = x * x, y * y, z * z
+    cols = [-_C1 * y, _C1 * z, -_C1 * x]
+    if degree >= 2:
+        cols += [_C2[0] * x * y, _C2[1] * y * z, _C2[2] * (2 * zz - xx - yy), _C2[3] * x * z, _C2[4] * (xx - yy)]
+    if degree >= 3:
+        cols += [_C3[0] * y * (3 * xx - yy), _C3[1] * x * y * z, _C3[2] * y * (4 * zz - xx - yy), _C3[3] * z * (2 * zz - 3 * xx - 3 * yy),
+                 _C3[4] * x * (4 * zz - xx - yy), _C3[5] * z * (xx - yy), _C3[6] * x * (xx - 3 * yy)]
+    return np.stack(cols, 1)
+
+
+def sh_rotation(R, degree):
+    """Matrix M so that rotating a splat by R maps its SH coefficients c to M @ c (per colour channel).
+
+    The rotated splat must look, from direction R d, the way the original looked from d. Each SH band is closed
+    under rotation, so M is found exactly by least squares over many sample directions.
+    """
+    d = np.random.default_rng(0).normal(size=(400, 3)); d /= np.linalg.norm(d, axis=1, keepdims=True)
+    B, B_rot = sh_basis(d, degree), sh_basis(d @ R, degree)   # d @ R evaluates at R^T d
+    M = np.linalg.lstsq(B, B_rot, rcond=None)[0]       # B M = B_rot, so B (M c) reproduces the old colours
+    M[np.abs(M) < 1e-9] = 0
+    return M
+
+
 def rotate(g, axis, th, keep_sh, why):
     """Rotate every splat by th radians about a unit axis through the origin."""
     K = np.array([[0, -axis[2], axis[1]], [axis[2], 0, -axis[0]], [-axis[1], axis[0], 0]])
@@ -139,10 +170,12 @@ def rotate(g, axis, th, keep_sh, why):
     q = np.array([*(np.asarray(axis) * math.sin(th / 2)), math.cos(th / 2)])
     g['pos'] = (g['pos'] @ R.T).astype(np.float32)
     g['rot'] = quat_mul(q, g['rot'].astype(np.float64)).astype(np.float32)
-    if abs(math.degrees(th)) > 2 and g['sh_degree'] > 0 and not keep_sh:
-        # higher-order SH would need rotating too; dropping them keeps colours right (and tames glare)
-        g['sh_degree'] = 0; g['sh'] = g['sh'][:, :0]
-        log(f'  {why}, so view-dependent shine (SH) was dropped')
+    if g['sh_degree'] > 0:
+        # view-dependent colour (SH) turns with the splat; unrotated it shows as rainbow shimmer
+        deg = min(g['sh_degree'], 3); K = (deg + 1) ** 2 - 1
+        sh = g['sh'].reshape(len(g['sh']), -1, 3)[:, :K].astype(np.float64)
+        g['sh'] = np.einsum('jk,nkc->njc', sh_rotation(R, deg), sh).reshape(len(sh), -1).astype(np.float32)
+        g['sh_degree'] = deg
 
 
 def level(g, n, keep_sh):
@@ -326,6 +359,7 @@ def main():
     ap.add_argument('--floor-tol', type=float, default=0.03, help='floor plane thickness (metres)')
     ap.add_argument('--no-sh', action='store_true', help='drop view-dependent shine: ~4x smaller and less whiteboard glare')
     ap.add_argument('--keep-sh', action='store_true', help='keep SH even if levelling rotated the scan')
+    ap.add_argument('--keep-background', action='store_true', help='keep the distant backdrop the scanning app wraps around the scan, instead of a black void')
     ap.add_argument('--no-square', action='store_true', help="don't turn the room so its walls run along x and z")
     ap.add_argument('--no-fill-floor', action='store_true', help="don't synthesise floor where the Scan has holes")
     ap.add_argument('--fill-cell', type=float, default=0.04, help='floor-filling grid size (metres)')
@@ -342,10 +376,18 @@ def main():
 
     keep(g, np.isfinite(g['pos']).all(1) & np.isfinite(g['scale']).all(1), 'invalid numbers', stats)
     keep(g, sigmoid(g['alpha']) >= a.min_opacity, 'nearly invisible', stats)
-    keep(g, np.exp(g['scale']).max(1) <= a.max_size, f'larger than {a.max_size} m', stats)
+    # Big splats inside the room are real: phones record walls and ceilings as large, soft splats.
+    # Only big splats outside the room are junk (the background "sky" scans add around everything).
+    size = np.exp(g['scale']).max(1); p = g['pos']
+    lo, hi = np.percentile(p, 0.5, axis=0) - 0.3, np.percentile(p, 99.5, axis=0) + 0.3
+    inside = ((p >= lo) & (p <= hi)).all(1)
+    backdrop = (size > 2.0) & ~inside                       # the distant backdrop scanning apps wrap around a scan
+    keep(g, (size <= a.max_size) | inside | (backdrop & a.keep_background), f'larger than {a.max_size} m and outside the room', stats)
     log('Removing floaters …')
-    keep(g, components(g['pos'], 0.15, 0.01), 'floaters (detached clumps)', stats)
-    keep(g, dense_enough(g['pos'], 0.06, 0.03), 'floaters (lonely splats near surfaces)', stats)
+    big = np.exp(g['scale']).max(1) > 0.09                  # large splats sit far apart by nature; don't call them lonely
+    keep(g, components(g['pos'], 0.15, 0.01) | big, 'floaters (detached clumps)', stats)
+    big = np.exp(g['scale']).max(1) > 0.09
+    keep(g, dense_enough(g['pos'], 0.06, 0.03) | big, 'floaters (lonely small splats near surfaces)', stats)
 
     log('Finding the floor …')
     f = find_floor(g['pos'], rng, a.floor_tol)
@@ -355,13 +397,15 @@ def main():
     _, _, inl = find_floor(g['pos'], rng, a.floor_tol)
     floor_y = float(np.median(inl[:, 1])); g['pos'][:, 1] -= floor_y
     log(f'  floor found; scan was tilted {tilt:.1f}°, now level at y = 0')
-    keep(g, g['pos'][:, 1] >= -0.08, 'below the floor (shiny-floor reflections)', stats)
+    keep(g, (g['pos'][:, 1] >= -0.08) | ((np.exp(g['scale']).max(1) > 2.0) & a.keep_background), 'below the floor (shiny-floor reflections)', stats)
     if not a.no_square:
         turn = square_up(g, a.floor_tol, a.keep_sh)
         if turn: log(f'  room squared up: turned {abs(turn):.1f}° so its walls run along x and z')
 
-    p = g['pos']; lo = np.percentile(p, 0.3, axis=0) - 0.25; hi = np.percentile(p, 99.7, axis=0) + 0.25
-    keep(g, (p[:, 0] >= lo[0]) & (p[:, 0] <= hi[0]) & (p[:, 2] >= lo[2]) & (p[:, 2] <= hi[2]) & (p[:, 1] <= hi[1]), 'outside the room', stats)
+    p = g['pos']; small = np.exp(g['scale']).max(1) <= 2.0
+    lo = np.percentile(p[small], 0.3, axis=0) - 0.25; hi = np.percentile(p[small], 99.7, axis=0) + 0.25
+    within = (p[:, 0] >= lo[0]) & (p[:, 0] <= hi[0]) & (p[:, 2] >= lo[2]) & (p[:, 2] <= hi[2]) & (p[:, 1] <= hi[1])
+    keep(g, within | (~small & a.keep_background), 'outside the room', stats)
     if a.no_sh and g['sh_degree'] > 0: g['sh_degree'] = 0; g['sh'] = g['sh'][:, :0]
     if a.max_splats and len(g['pos']) > a.max_splats:
         imp = sigmoid(g['alpha']) * np.exp(g['scale'].sum(1))
