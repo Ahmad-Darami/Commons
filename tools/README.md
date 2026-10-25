@@ -59,3 +59,21 @@ scene.add(room); await room.initialized;
 - Runs `render_views.mjs` and `scan_report.py` when they're installed, into `--qa-dir`. `--no-qa` skips them, and `--work-dir` keeps the `*.clean.ply` master copy and the preview.
 
 Then open `http://localhost:5173/?curate&room=<room-id>` to confirm the suggestions and place the Boards. `python tools/test_publish_room.py` checks it on a synthetic Scan.
+
+## Checking a Scan
+
+`scan_report.py` writes a **Scan quality report** for a Room Curator. It covers:
+- how much of the floor, each wall and the ceiling has real splats (what the cleanup filled in doesn't count)
+- whether the room's size is plausible
+- how many ghost smears, needle streaks, huge blobs and fuzz splats remain
+- a verdict of **good**, **usable** or **rescan recommended**, with advice that points to the steps of `docs/scanning-guide.md`
+
+    python scan_report.py out/my_scan.clean.ply out/my_scan.layout.json --raw my_scan.spz --html out/report.html --renders out/views.png
+
+`--html` writes one self-contained page with a coverage map (the room box unfolded around its floor: green real, amber synthesized, red missing). `--json` writes the numbers for scripts.
+
+`render_views.mjs` renders six standard views from inside the Room as one labeled contact sheet: standing at 1.6 m toward each wall, seated at 1.12 m toward the center, and a seat's view, all derived from `layout.json`. It uses Spark in headless Chromium and takes its modules from `app/node_modules` (run `npm ci` in `app/` first, or pass `--app-dir`). Software rendering takes about 10–90 s per view.
+
+    node render_views.mjs out/my_scan.spz out/my_scan.layout.json out/views.png [--size 800x450]
+
+`python test_scan_report.py` checks the report on synthetic scans: a complete room, one with the ceiling and walls cut away, floor holes and ghost smears.
