@@ -1,5 +1,9 @@
 [
   {
+    "id": "psu-first-scan",
+    "name": "Penn State · first real scan"
+  },
+  {
     "id": "demo-study-room",
     "name": "Demo study room (synthetic scan)"
   }

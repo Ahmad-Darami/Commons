@@ -18,7 +18,7 @@ def run(*args):
 
 
 with tempfile.TemporaryDirectory() as tmp:
-    for name, flags in [('clean', ['--clean']), ('messy', []), ('holes', ['--holes'])]:
+    for name, flags in [('clean', ['--clean']), ('messy', []), ('holes', ['--holes']), ('turned', ['--yaw'])]:
         run(os.path.join(HERE, 'make_test_scan.py'), os.path.join(tmp, f'{name}.ply'), *flags)
         out = run(os.path.join(HERE, 'clean_scan.py'), os.path.join(tmp, f'{name}.ply'), '--out-dir', os.path.join(tmp, name))
         kept = re.search(r'Kept ([\d,]+) of ([\d,]+)', out)
@@ -36,6 +36,8 @@ with tempfile.TemporaryDirectory() as tmp:
         if name == 'messy':
             check(0.8 * n < k < 0.95 * n, f'messy: removes junk but keeps the room ({k} of {n})')
             check('below the floor' in out and 'floaters' in out, 'messy: removes floaters and the below-floor ghost')
+        if name == 'turned':
+            check('turned 30.0°' in out, f'turned: squares up a room scanned at a 30° angle')
         if name == 'holes':
             m = re.search(r'filled ([\d.]+) m² of missing floor', out)
             check(bool(m) and 2.8 < float(m.group(1)) < 3.8, f'holes: fills about 3.2 m² of floor holes (got {m and m.group(1)})')
