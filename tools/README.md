@@ -15,6 +15,12 @@ python clean_scan.py my_scan.ply                                    # or my_scan
 
 **If the spz install fails on Linux** with `relocation ... libzstd.a`: that's Ubuntu's static zstd library. The `CMAKE_ARGS` line above makes the build use its own copy.
 
+**Wall and ceiling filling (ADR-0003):** phone scans usually miss most of the walls and the whole ceiling, and the Room then floats in black. The tool works out the room's box (each wall where the floor stops, moved out to the wall's own splats where it was scanned; the ceiling at the top of the scanned walls), measures how much of each wall and the ceiling the Scan actually covers on an 8 cm grid, and fills only the holes. The fill copies colours from the real surface nearby, using the median of several nearby patches so a desk or door against a wall doesn't speckle it. A surface the Scan never saw borrows from the nearest real one: other walls, or the tops of the walls for the ceiling. Real splats are never moved. Every synthesized splat is a flat disc, 2 mm thick, lying on its surface's plane, with no view-dependent colour. Turn this off with `--no-fill-walls` and `--no-fill-ceiling`. Rooms that aren't box-shaped (floor covering under 70% of its bounding rectangle) are left alone.
+
+**Ghost suppression:** where the phone barely looked it leaves big, lone, often opaque splats whose view-dependent colour turns into pastel streaks from new viewpoints. The tool removes needles (σ ≥ 5 cm and 8× longer than wide), big or lonely splats behind the walls or above the ceiling, and outsized smears inside the Room (σ ≥ 5 cm and ≥ 10× the Scan's median splat). It also fades the view-dependent colour of splats that are lonely or bigger than 2 cm. By default it keeps SH up to degree 1 (`--sh-degree`, 0 to 3), which looks the same in renders and gives a ~25% smaller file. `--keep-ghosts` turns all of this off.
+
+**What it reports:** a *Scan report* lists how much of each wall, the ceiling and the floor the Scan missed, and which to rescan. `layout.json` records what was synthesized, as `"synthesized": {"floor_m2": …, "walls_m2": {"-z": …, "+x": …, "+z": …, "-x": …}, "ceiling_m2": …}`, with walls keyed by their side of `"room_box"` (the wall and ceiling planes), so a Room Curator can see how much of a Room is real.
+
 **What it removes:** nearly invisible splats, giant blobs, floating fuzz (both detached clumps and lonely splats near walls), the mirror-image "ghost room" that shiny floors create underneath, and strays outside the room. It also levels the floor to `y = 0`, centers the room, and caps the splat count (default 1.5 M).
 
 **What it writes, next to the input:**
@@ -27,7 +33,7 @@ python clean_scan.py my_scan.ply                                    # or my_scan
 | `*.layout.json` | Starter Layout: floor, room bounds and height. A Room Curator still adds tables, seats and Boards |
 
 **Useful flags:**
-- `--no-sh` drops view-dependent shine. Files get about 4× smaller and whiteboard glare goes away.
+- `--no-sh` (same as `--sh-degree 0`) drops view-dependent shine. Files get smaller and whiteboard glare goes away. `--sh-degree 3` keeps all the shine a Scan has.
 - `--max-splats 800000` for weaker laptops.
 - `--spz-version 4` writes the newest, slightly smaller format.
 
@@ -44,7 +50,7 @@ const room = new SplatMesh({ url: '/rooms/pattee-3/pattee-3.spz' });
 scene.add(room); await room.initialized;
 ```
 
-`make_test_scan.py` generates a fake messy room for testing. `--clean` makes one with no defects, and `--holes` punches holes in the floor. `python test_clean_scan.py` runs the whole pipeline on all three and checks the results. CI runs it on every PR.
+`make_test_scan.py` generates a fake messy room for testing. `--clean` makes one with no defects, `--holes` punches holes in the floor, `--yaw` turns it 30°, `--bare` leaves out the ceiling and most of three walls, and `--ghosts` adds blobs behind the walls, needles and lone mid-air blobs. `python test_clean_scan.py` runs the whole pipeline on each and checks the results, including that a complete room gets nothing synthesized. CI runs it on every PR.
 
 ## Publishing a Scan as a Room
 
