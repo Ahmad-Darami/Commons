@@ -38,3 +38,5 @@ jobs:
             exit 1
           fi
       - run: python tools/test_clean_scan.py
+      - run: python tools/test_publish_room.py
+      - run: python tools/test_scan_report.py

@@ -18,7 +18,9 @@ def run(*args):
 
 
 with tempfile.TemporaryDirectory() as tmp:
-    for name, flags in [('clean', ['--clean']), ('messy', []), ('holes', ['--holes']), ('turned', ['--yaw'])]:
+    fixtures = [('clean', ['--clean']), ('messy', []), ('holes', ['--holes']), ('turned', ['--yaw']),
+                ('bare', ['--bare']), ('ghosts', ['--clean', '--ghosts'])]
+    for name, flags in fixtures:
         run(os.path.join(HERE, 'make_test_scan.py'), os.path.join(tmp, f'{name}.ply'), *flags)
         out = run(os.path.join(HERE, 'clean_scan.py'), os.path.join(tmp, f'{name}.ply'), '--out-dir', os.path.join(tmp, name))
         kept = re.search(r'Kept ([\d,]+) of ([\d,]+)', out)
@@ -31,8 +33,14 @@ with tempfile.TemporaryDirectory() as tmp:
         check('tilted 6.0°' in out, f'{name}: finds and corrects the 6° tilt')
         check(abs(size[0] - 6) < 0.2 and abs(size[1] - 4.5) < 0.2 and abs(size[2] - 2.8) < 0.15, f'{name}: room measures about 6 × 4.5 × 2.8 m (got {size})')
         check(layout['walkable']['rows'] and '#' in ''.join(layout['walkable']['rows']), f'{name}: layout has a walkable floor map')
+        syn = layout.get('synthesized', {})
+        check(set(syn) == {'floor_m2', 'walls_m2', 'ceiling_m2'} and set(syn['walls_m2']) == {'-z', '+x', '+z', '-x'} and 'Synthesized: floor' in out,
+              f'{name}: records and prints what was synthesized, wall by wall ({syn})')
+        if name != 'bare':   # every other fixture has all 4 walls and the ceiling: repair must add nothing there
+            check(sum(syn['walls_m2'].values()) == 0 and syn['ceiling_m2'] == 0, f'{name}: complete walls and ceiling get nothing added ({syn})')
         if name == 'clean':
             check(k == n, f'clean: keeps every real splat ({k} of {n})')
+            check('ghosts:' not in out and 'faded' not in out, 'clean: ghost suppression leaves a clean room alone')
         if name == 'messy':
             check(0.8 * n < k < 0.95 * n, f'messy: removes junk but keeps the room ({k} of {n})')
             check('below the floor' in out and 'floaters' in out, 'messy: removes floaters and the below-floor ghost')
@@ -41,6 +49,29 @@ with tempfile.TemporaryDirectory() as tmp:
         if name == 'holes':
             m = re.search(r'filled ([\d.]+) m² of missing floor', out)
             check(bool(m) and 2.8 < float(m.group(1)) < 3.8, f'holes: fills about 3.2 m² of floor holes (got {m and m.group(1)})')
+            check(abs(syn['floor_m2'] - float(m.group(1))) < 0.01, f'holes: layout records the floor it filled ({syn})')
+        if name == 'bare':
+            # 35.7 m² of wall and 27 m² of ceiling were left out; corners and the floor's edge really are seen
+            w = syn['walls_m2']
+            check(31 < sum(w.values()) < 37, f"bare: fills about 35 m² of missing walls (got {w})")
+            # missing: all of +z (16.8 m²) and +x (12.6 m²), the top half of -x (6.3 m²); -z was scanned
+            check(w['-z'] == 0 and 15 < w['+z'] < 17 and 11 < w['+x'] < 12.7 and 5 < w['-x'] < 6.5, f'bare: fills each wall by what it was missing ({w})')
+            check(24 < syn['ceiling_m2'] < 27.5, f"bare: fills about 27 m² of missing ceiling (got {syn['ceiling_m2']})")
+            check('+x wall   9' in out and '−z wall    0%' in out and 'rescan if you can' in out, 'bare: the Scan report names the missing walls and spares the scanned one')
+            off = run(os.path.join(HERE, 'clean_scan.py'), os.path.join(tmp, 'bare.ply'), '--out-dir', os.path.join(tmp, 'bare-off'), '--no-fill-walls', '--no-fill-ceiling')
+            syn_off = json.load(open(os.path.join(tmp, 'bare-off', 'bare.layout.json')))['synthesized']
+            check(sum(syn_off['walls_m2'].values()) == 0 and syn_off['ceiling_m2'] == 0 and '+x wall   9' in off, '--no-fill-walls/--no-fill-ceiling: adds nothing but still reports what is missing')
+            check(int(re.search(r'([\d,]+) in all', off).group(1).replace(',', '')) == k, 'bare: filling never removes or adds real splats')
+        if name == 'ghosts':
+            # 300 blobs behind the walls, 60 needles, 100 lone blobs in mid-air (see make_test_scan.py)
+            got = {w: int(m.group(1).replace(',', '')) for w in ('needles', 'beyond the walls') for m in [re.search(r'([\d,]+)  ghosts: [a-z ]*' + w, out)] if m}
+            check(got.get('needles') == 60 and got.get('beyond the walls') == 300, f'ghosts: removes the 60 needles and 300 blobs behind the walls (got {got})')
+            check(k >= n - 460, f'ghosts: keeps every real splat ({k} of {n}, 460 ghosts)')
+            sys.path.insert(0, HERE); import clean_scan as cs, numpy as np
+            g = cs.load(os.path.join(tmp, name, name + '.clean.ply')); big = np.exp(g['scale']).max(1)
+            shm = np.abs(g['sh']).max(1)
+            check((big > 0.06).sum() > 20 and shm[big > 0.06].max() < 1e-3, 'ghosts: lone big blobs that stay lose their view-dependent colour')
+            check(np.median(shm[big < 0.03]) > 0.02, 'ghosts: real splats keep their view-dependent colour')
 
 # Rotating a splat must rotate its view-dependent colour too, or it shows rainbow shimmer.
 sys.path.insert(0, HERE)
