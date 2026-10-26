@@ -1,6 +1,6 @@
 # Handoff: continuing Commons locally
 
-_Last updated: 2026-10-25, during the cloud session. If this file and GitHub disagree, GitHub is the truth._
+_Last updated: 2026-10-26, after the whole scan pipeline (#18–#22) was merged into `main`. If this file and GitHub disagree, GitHub is the truth._
 
 Start with `CLAUDE.md` (rules for anyone, human or agent, working here), `CONTEXT.md` (the glossary) and `docs/adr/`. This file covers only **where things stand right now** and how to pick them up.
 
@@ -19,32 +19,28 @@ python tools/test_clean_scan.py       # should end "all scan pipeline checks pas
 ```
 The live preview is at **https://ahmad-darami.github.io/Commons/**. It redeploys on every merge to `main`.
 
-## 2. Open pull requests: merge in this order
-They're **stacked**: each is built on the one before.
+## 2. Pull requests
+None are open. The scan pipeline (#18, #19, #20, #22) and this handoff (#21) are all merged into `main`, and the live preview shows the repaired first Room. Start new work from `main`.
 
-| PR | Branch | What |
-|---|---|---|
-| [#18](https://github.com/Ahmad-Darami/Commons/pull/18) | `ws/scan-pipeline-sh-and-walls` → `main` | Correct rotation of view-dependent color; filters that keep walls; `--keep-background`; ADR-0003; `docs/scanning-guide.md` |
-| [#19](https://github.com/Ahmad-Darami/Commons/pull/19) | `ws/scan-pipeline-publish` → #18 | `tools/publish_room.py`: Scan → Room in one command, with suggested Tables and seats. Adds optional `suggested` to the Layout types |
-| [#20](https://github.com/Ahmad-Darami/Commons/pull/20) | `ws/scan-pipeline-report` → #19 | `tools/scan_report.py` (quality report and verdict) and `tools/render_views.mjs` (six preview renders) |
+## 3. Where the scan pipeline stands
+The whole pipeline is built and in the PRs above. One command takes a raw phone Scan to a published, checked Room in about 1–2 minutes:
+```bash
+python tools/publish_room.py <scan.spz> <room-id> "<Room name>" --default --work-dir scans/<room-id>
+```
+It runs the cleanup and repair (walls, ceiling, floor, ghosts), suggests Tables and seats, writes the Room folder, and renders six preview views plus a quality report (`report.html`) into a QA folder. `scans/` is git-ignored; keep raw scans out of git.
 
-After merging #18, GitHub retargets #19 to `main` (and likewise #20 after #19), if you delete each merged branch. Otherwise edit the base branch by hand.
+**Next for the scan pipeline:**
+- **Rescan** the room following `docs/scanning-guide.md`, and publish it with the command above. The first Scan's report says "rescan recommended": walls 7–54% covered, ceiling 0%.
+- **Filled walls don't match each other in color, and look grainy up close.** With a better Scan there's less to fill. Ideas if it still shows:
+  - estimate one paint color per room from whatever wall is seen
+  - smoother discs for walls
+- **L-shaped rooms** are skipped by wall filling, which assumes a box.
+- **One Scan or several?** A Room comes from one Scan today (ADR-0001), and `publish_room.py` takes one file. Several Scans of the same room *could* be stitched together: the pipeline already levels and squares up each one, so lining them up is mostly a slide across the floor and a quarter-turn. It would need:
+  - a `tools/merge_scans.py` that aligns the Scans, removes the doubled overlap and matches their color
+  - a new ADR superseding ADR-0001
 
-## 3. Work that was still in progress
-- **Scan repair** (branch `ws/scan-pipeline-repair`): automatic filling of missing **walls and ceiling**, removal of **ghost smears** (outsized opaque splats; the first Scan has 521 of them blurring about 38 m²), and recording what was synthesized in `layout.json["synthesized"]`. A subagent was working on it in the cloud.
-  - If the branch exists on GitHub, it's either finished or a `WIP:` checkpoint. Check its last commit.
-  - **If it doesn't exist, the work was lost.** Redo it from `docs/adr/0003-repair-what-a-scan-misses.md` and the findings in #20's description. Its tasks:
-    1. Coverage grid on each wall plane and the ceiling.
-    2. Synthesize splats only where there's no coverage, copying colors from real splats on the same surface. Copy how `fill_floor()` does it.
-    3. Drop splats that are both ≥ 5 cm and ≥ 10× the Scan's median splat size.
-    4. Write `"synthesized": {"floor_m2", "walls_m2": {"-z","+x","+z","-x"}, "ceiling_m2"}`.
-    5. Add synthetic test fixtures without walls and ceiling.
-- **The live Room `psu-first-scan`** still uses the older cleanup. Once the repair lands, re-publish it:
-  ```bash
-  python tools/publish_room.py <your .spz> psu-first-scan "Penn State · first real scan" --default --work-dir scans/psu
-  python tools/scan_report.py scans/psu/*.clean.ply scans/psu/*.layout.json --html scans/psu/report.html
-  ```
-  (`scans/` is git-ignored. Keep raw scans out of git.)
+  Not decided. Try one complete Scan with the scanning guide first. Stitching makes sense for a top-up Scan of walls and ceiling, or for the bigger classroom later.
+- **The Curator editor** should show `"suggested": true` Tables and seats, and drop the flag when one is confirmed (workstream curator, #8).
 
 ## 4. Decisions waiting on you (GitHub issues)
 - **#1 Backend** for Study Groups and Invite Links. Recommended: Cloudflare Workers + Durable Objects.
