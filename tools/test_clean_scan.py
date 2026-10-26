@@ -42,6 +42,17 @@ with tempfile.TemporaryDirectory() as tmp:
             m = re.search(r'filled ([\d.]+) m² of missing floor', out)
             check(bool(m) and 2.8 < float(m.group(1)) < 3.8, f'holes: fills about 3.2 m² of floor holes (got {m and m.group(1)})')
 
+# Rotating a splat must rotate its view-dependent colour too, or it shows rainbow shimmer.
+sys.path.insert(0, HERE)
+import math, numpy as np, clean_scan as cs
+rng = np.random.default_rng(5); worst = 0.0
+for _ in range(5):
+    ax = rng.normal(size=3); ax /= np.linalg.norm(ax); th = rng.uniform(-3, 3)
+    K = np.array([[0, -ax[2], ax[1]], [ax[2], 0, -ax[0]], [-ax[1], ax[0], 0]]); R = np.eye(3) + math.sin(th) * K + (1 - math.cos(th)) * K @ K
+    c = rng.normal(size=(15, 3)); d = rng.normal(size=(500, 3)); d /= np.linalg.norm(d, axis=1, keepdims=True)
+    worst = max(worst, np.abs(cs.sh_basis(d, 3) @ c - cs.sh_basis(d @ R.T, 3) @ (cs.sh_rotation(R, 3) @ c)).max())
+check(worst < 1e-9, f'SH rotation keeps view-dependent colour exact (max error {worst:.1e})')
+
 if failures:
     raise SystemExit(f'{len(failures)} check(s) failed')
 print('all scan pipeline checks passed')
