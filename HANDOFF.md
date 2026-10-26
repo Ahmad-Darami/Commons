@@ -1,6 +1,6 @@
 # Handoff: continuing Commons locally
 
-_Last updated: 2026-10-25, after the scan-pipeline PRs (#18–#22) were opened. If this file and GitHub disagree, GitHub is the truth._
+_Last updated: 2026-10-26, after the whole scan pipeline (#18–#22) was merged into `main`. If this file and GitHub disagree, GitHub is the truth._
 
 Start with `CLAUDE.md` (rules for anyone, human or agent, working here), `CONTEXT.md` (the glossary) and `docs/adr/`. This file covers only **where things stand right now** and how to pick them up.
 
@@ -19,17 +19,8 @@ python tools/test_clean_scan.py       # should end "all scan pipeline checks pas
 ```
 The live preview is at **https://ahmad-darami.github.io/Commons/**. It redeploys on every merge to `main`.
 
-## 2. Open pull requests: merge in this order
-They're **stacked**: each is built on the one before.
-
-| PR | Branch | What |
-|---|---|---|
-| [#18](https://github.com/Ahmad-Darami/Commons/pull/18) | `ws/scan-pipeline-sh-and-walls` → `main` | Correct rotation of view-dependent color; filters that keep walls; `--keep-background`; ADR-0003; `docs/scanning-guide.md` |
-| [#19](https://github.com/Ahmad-Darami/Commons/pull/19) | `ws/scan-pipeline-publish` → #18 | `tools/publish_room.py`: Scan → Room in one command, with suggested Tables and seats. Adds optional `suggested` to the Layout types |
-| [#20](https://github.com/Ahmad-Darami/Commons/pull/20) | `ws/scan-pipeline-report` → #19 | `tools/scan_report.py` (quality report and verdict) and `tools/render_views.mjs` (six preview renders) |
-| [#22](https://github.com/Ahmad-Darami/Commons/pull/22) | `ws/scan-pipeline-repair` → #20 | Scan repair: fills missing walls and ceiling, removes ghost smears, records what was synthesized, and re-publishes the first Room with all of it |
-
-Merge #18 → #19 → #20 → #22. When you merge one and delete its branch, GitHub retargets the next to `main`; otherwise edit its base branch by hand. Once #22 is merged, the live site shows the repaired Room. The handoff (#21) is independent.
+## 2. Pull requests
+None are open. The scan pipeline (#18, #19, #20, #22) and this handoff (#21) are all merged into `main`, and the live preview shows the repaired first Room. Start new work from `main`.
 
 ## 3. Where the scan pipeline stands
 The whole pipeline is built and in the PRs above. One command takes a raw phone Scan to a published, checked Room in about 1–2 minutes:
@@ -44,6 +35,11 @@ It runs the cleanup and repair (walls, ceiling, floor, ghosts), suggests Tables 
   - estimate one paint color per room from whatever wall is seen
   - smoother discs for walls
 - **L-shaped rooms** are skipped by wall filling, which assumes a box.
+- **One Scan or several?** A Room comes from one Scan today (ADR-0001), and `publish_room.py` takes one file. Several Scans of the same room *could* be stitched together: the pipeline already levels and squares up each one, so lining them up is mostly a slide across the floor and a quarter-turn. It would need:
+  - a `tools/merge_scans.py` that aligns the Scans, removes the doubled overlap and matches their color
+  - a new ADR superseding ADR-0001
+
+  Not decided. Try one complete Scan with the scanning guide first. Stitching makes sense for a top-up Scan of walls and ceiling, or for the bigger classroom later.
 - **The Curator editor** should show `"suggested": true` Tables and seats, and drop the flag when one is confirmed (workstream curator, #8).
 
 ## 4. Decisions waiting on you (GitHub issues)
